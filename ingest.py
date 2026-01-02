@@ -113,6 +113,7 @@ class ProcessedGame:
     loser_site: Optional[int]
     winner_cards: list  # [(blueprint, role, count), ...]
     loser_cards: list
+    played_blueprints: set  # Set of normalized blueprints that were actually played
 
 
 def classify_outcome_tier(win_reason: str, lose_reason: str, winner_site: Optional[int]) -> int:
@@ -215,6 +216,28 @@ def extract_deck_cards(deck_data: dict, normalizer: BlueprintNormalizer) -> list
         cards.append((normalized, 'ring', 1))
     
     return cards
+
+
+def extract_played_blueprints(summary: dict, normalizer: BlueprintNormalizer) -> set:
+    """
+    Extract normalized blueprints of cards that were actually played.
+    
+    playedCards contains indices into allCards.
+    
+    NOTE: Until metadataVersion >= 3, attachments may be undercounted due to
+    a bug where Attached zone cards weren't added to playedCards.
+    """
+    all_cards = summary.get('allCards', {})
+    played_indices = summary.get('playedCards', [])
+    
+    played_blueprints = set()
+    for idx in played_indices:
+        # allCards keys are strings
+        blueprint = all_cards.get(str(idx))
+        if blueprint:
+            played_blueprints.add(normalizer.normalize(blueprint))
+    
+    return played_blueprints
 
 
 def construct_summary_path(game: GameRecord, base_path: Path) -> Path:
@@ -350,6 +373,9 @@ def process_game(
             logger.warning(f"Game {game.game_id}: No deck data found")
             return None
         
+        # Extract played cards (which blueprints actually saw play)
+        played_blueprints = extract_played_blueprints(summary, normalizer)
+        
         return ProcessedGame(
             game_id=game.game_id,
             format_name=game.format_name,
@@ -364,6 +390,7 @@ def process_game(
             loser_site=loser_site,
             winner_cards=winner_cards,
             loser_cards=loser_cards,
+            played_blueprints=played_blueprints,
         )
     
     except Exception as e:
@@ -408,19 +435,21 @@ def insert_batch(conn, cursor, processed_games: list, dry_run: bool = False):
         # Insert game_deck_cards rows
         cards_sql = """
             INSERT INTO game_deck_cards (
-                game_id, player_id, card_blueprint, card_role, card_count, is_winner
-            ) VALUES (%s, %s, %s, %s, %s, %s)
+                game_id, player_id, card_blueprint, card_role, card_count, is_winner, was_played
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
         
         cards_data = []
         for g in processed_games:
             for blueprint, role, count in g.winner_cards:
+                was_played = blueprint in g.played_blueprints
                 cards_data.append((
-                    g.game_id, g.winner_player_id, blueprint, role, count, True
+                    g.game_id, g.winner_player_id, blueprint, role, count, True, was_played
                 ))
             for blueprint, role, count in g.loser_cards:
+                was_played = blueprint in g.played_blueprints
                 cards_data.append((
-                    g.game_id, g.loser_player_id, blueprint, role, count, False
+                    g.game_id, g.loser_player_id, blueprint, role, count, False, was_played
                 ))
         
         if cards_data:

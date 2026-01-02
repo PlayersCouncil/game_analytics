@@ -62,6 +62,11 @@ CREATE TABLE game_deck_cards (
   -- Denormalized for query efficiency (set once at insert, never changes)
   is_winner BOOLEAN NOT NULL,
   
+  -- Was any copy of this blueprint played by anyone in this game?
+  -- NOTE: Until metadataVersion >= 3, attachments may be undercounted due to
+  -- a bug where Attached zone cards weren't added to playedCards.
+  was_played BOOLEAN NOT NULL DEFAULT FALSE,
+  
   PRIMARY KEY (id),
   CONSTRAINT fk_gdc_game FOREIGN KEY (game_id) REFERENCES game_analysis(game_id) ON DELETE CASCADE,
   CONSTRAINT fk_gdc_player FOREIGN KEY (player_id) REFERENCES player(id),
@@ -84,4 +89,69 @@ CREATE TABLE game_deck_cards (
   -- Query pattern: "What did the winning player run in game X" (archetype analysis)
   INDEX idx_game_winner (game_id, is_winner)
   
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- ============================================================================
+-- PRE-COMPUTATION TABLES
+-- Aggregated stats for fast API queries
+-- ============================================================================
+
+-- Daily card stats aggregated by tier combinations
+CREATE TABLE card_stats_daily (
+  card_blueprint VARCHAR(20) NOT NULL,
+  format_name VARCHAR(50) NOT NULL,
+  stat_date DATE NOT NULL,
+  outcome_tier TINYINT NOT NULL COMMENT '1=Decisive, 2=Late Concession, 3=Ambiguous',
+  competitive_tier TINYINT NOT NULL COMMENT '1=Casual, 2=League, 3=Tournament, 4=Championship',
+  
+  -- Inclusion-based stats
+  deck_appearances INT NOT NULL DEFAULT 0,
+  deck_wins INT NOT NULL DEFAULT 0,
+  total_copies INT NOT NULL DEFAULT 0,
+  
+  -- Play-based stats (only counted when card was actually played)
+  played_appearances INT NOT NULL DEFAULT 0,
+  played_wins INT NOT NULL DEFAULT 0,
+  
+  PRIMARY KEY (card_blueprint, format_name, stat_date, outcome_tier, competitive_tier),
+  INDEX idx_format_date (format_name, stat_date),
+  INDEX idx_format_tiers (format_name, outcome_tier, competitive_tier)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- Balance patch markers for before/after analysis
+CREATE TABLE balance_patches (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  patch_name VARCHAR(100) NOT NULL UNIQUE,
+  patch_date DATE NOT NULL,
+  notes TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  INDEX idx_date (patch_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- Pre-computation job tracking
+CREATE TABLE stats_computation_log (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  computation_type ENUM('daily', 'full_rebuild') NOT NULL,
+  started_at DATETIME NOT NULL,
+  completed_at DATETIME,
+  records_processed INT,
+  status ENUM('running', 'completed', 'failed') NOT NULL,
+  error_message TEXT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- Optional: Card catalog for name lookups
+-- Can be populated from HJSON or via GEMP API
+CREATE TABLE card_catalog (
+  blueprint VARCHAR(20) PRIMARY KEY,
+  card_name VARCHAR(100),
+  culture VARCHAR(30),
+  card_type VARCHAR(30),
+  side ENUM('free_peoples', 'shadow'),
+  twilight_cost TINYINT,
+  last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;

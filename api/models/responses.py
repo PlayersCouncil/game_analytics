@@ -1,0 +1,82 @@
+"""
+Pydantic models for API responses.
+"""
+
+from datetime import date
+from typing import Optional
+from pydantic import BaseModel
+
+
+class DateRange(BaseModel):
+    start: Optional[date] = None
+    end: Optional[date] = None
+
+
+class CardStats(BaseModel):
+    blueprint: str
+    name: Optional[str] = None  # Populated if card_catalog available
+    games: int
+    copies: int
+    inclusion_wr: float
+    played_games: int
+    played_wr: Optional[float] = None
+    priority: float  # games * (wr - 0.5)
+
+
+class CardStatsResponse(BaseModel):
+    format: str
+    date_range: DateRange
+    outcome_tiers: Optional[list[int]] = None
+    competitive_tiers: Optional[list[int]] = None
+    total_cards: int
+    cards: list[CardStats]
+
+
+class FormatCardStats(BaseModel):
+    games: int
+    copies: int
+    inclusion_wr: float
+    played_games: int
+    played_wr: Optional[float] = None
+    priority: float
+
+
+class CompareCardStats(BaseModel):
+    blueprint: str
+    name: Optional[str] = None
+    stats: dict[str, FormatCardStats]  # format_name -> stats
+
+
+class CardCompareResponse(BaseModel):
+    date_range: DateRange
+    outcome_tiers: Optional[list[int]] = None
+    competitive_tiers: Optional[list[int]] = None
+    cards: list[CompareCardStats]
+
+
+class BalancePatch(BaseModel):
+    id: int
+    patch_name: str
+    patch_date: date
+    notes: Optional[str] = None
+
+
+class PatchListResponse(BaseModel):
+    patches: list[BalancePatch]
+
+
+class ComputationStatus(BaseModel):
+    id: int
+    computation_type: str
+    started_at: str
+    completed_at: Optional[str] = None
+    records_processed: Optional[int] = None
+    status: str
+    error_message: Optional[str] = None
+
+
+class AdminStatusResponse(BaseModel):
+    recent_computations: list[ComputationStatus]
+    total_games_analyzed: int
+    total_card_stat_rows: int
+    latest_game_date: Optional[date] = None
