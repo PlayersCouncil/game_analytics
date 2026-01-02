@@ -1,0 +1,17 @@
+# GEMP Analytics Cron Jobs
+# Scheduled during low-traffic window (0500-0800 UTC)
+# Using nice/ionice to minimize impact on game server
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# Ingestion: 0500 UTC daily
+# nice -n 15: Low CPU priority
+# ionice -c 2 -n 7: Best-effort IO, lowest priority
+# --limit 2000: Process max 2000 games per run to bound execution time
+0 5 * * * cd /app && nice -n 15 ionice -c 2 -n 7 python ingest.py --limit 2000 >> /app/logs/ingest.log 2>&1
+
+# Precompute: 0530 UTC daily (after ingestion completes)
+30 5 * * * cd /app && nice -n 15 ionice -c 2 -n 7 python precompute.py >> /app/logs/precompute.log 2>&1
+
+# Empty line required at end of crontab

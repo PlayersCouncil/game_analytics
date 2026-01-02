@@ -5,10 +5,13 @@ FastAPI service for querying card performance statistics.
 """
 
 import os
+from pathlib import Path
 from contextlib import contextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import mysql.connector
 from mysql.connector import pooling
 
@@ -59,9 +62,11 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:*",
+        "http://localhost:8000",
+        "http://localhost:8001",
         "https://play.lotrtcgpc.net",
         "https://gemp.lotrtcgpc.net",
+        "https://test.lotrtcgpc.net",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -93,7 +98,17 @@ app.include_router(patches_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 
 
-# Root redirect
+# Static files - serve dashboard
+static_dir = Path(__file__).parent.parent / "static"
+if static_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+
+# Root serves dashboard
 @app.get("/")
 def root():
+    """Serve the analytics dashboard."""
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
     return {"message": "GEMP Analytics API", "docs": "/docs"}

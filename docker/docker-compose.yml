@@ -1,0 +1,60 @@
+services:
+
+  analytics:
+    env_file:
+      - .env
+    container_name: gemp_analytics
+    build:
+      context: ..
+      dockerfile: docker/analytics.Dockerfile
+    image: gemp_analytics
+    restart: always
+    ports:
+      - target: 8000
+        published: "${ANALYTICS_PORT}"
+    volumes:
+      # Replay summaries - READ ONLY to avoid any risk of data loss
+      - type: bind
+        source: ${REPLAY_PATH}
+        target: /replay
+        read_only: true
+      # Logs - persist outside container
+      - type: bind
+        source: ../logs
+        target: /app/logs
+      # Blueprint mapping - can be updated without rebuild
+      - type: bind
+        source: ../blueprintMapping.txt
+        target: /app/blueprintMapping.txt
+        read_only: true
+    environment:
+      - GEMP_DB_HOST=${GEMP_DB_HOST}
+      - GEMP_DB_PORT=${GEMP_DB_PORT}
+      - GEMP_DB_USER=${GEMP_DB_USER}
+      - GEMP_DB_PASSWORD=${GEMP_DB_PASSWORD}
+      - GEMP_DB_NAME=${GEMP_DB_NAME}
+      - GEMP_REPLAY_PATH=/replay
+      - GEMP_MAPPING_FILE=/app/blueprintMapping.txt
+      - GEMP_ANALYTICS_ADMIN_KEY=${ANALYTICS_ADMIN_KEY}
+    networks:
+      - gemp_network
+    # Resource limits to protect game server
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  gemp_network:
+    external: true
+    name: gemp_1_gemp_net_1

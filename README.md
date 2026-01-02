@@ -1,51 +1,42 @@
 # GEMP Game Analytics
 
-Processes JSON game summaries from GEMP replays into analytics database tables for card performance analysis.
+Card analytics for Lord of the Rings TCG balance analysis. Processes JSON game summaries from GEMP replays into analytics database tables for card performance analysis.
+
+## Quick Start (Docker)
+
+1. **Ensure GEMP is running** (creates required network)
+
+2. **Create database schema**:
+   ```bash
+   mysql -h <DB_HOST> -u gempuser -p gemp_db < schema.sql
+   ```
+
+3. **Configure and start**:
+   ```bash
+   cd docker
+   cp .env.example .env
+   # Edit .env with your settings
+   docker compose up -d
+   ```
+
+4. **Access dashboard**: http://localhost:8001
+
+See `docker/README.md` for detailed setup instructions.
 
 ## Components
 
-1. **Ingestion Script** (`ingest.py`) - Reads game summaries, populates raw data tables
-2. **Pre-computation Script** (`precompute.py`) - Aggregates daily statistics for fast queries
-3. **FastAPI Service** (`api/`) - REST API for balance team queries
-
-## Prerequisites
-
-- Python 3.8+
-- MySQL/MariaDB with analytics schema (see `schema.sql`)
-- Access to GEMP replay directory
-- `blueprintMapping.txt` from GEMP source
-
-## Installation
-
-```bash
-pip install -r requirements.txt
-```
+- **Ingestion** (`ingest.py`) - Processes game replay summaries into database
+- **Pre-computation** (`precompute.py`) - Aggregates daily stats for fast queries
+- **API** (`api/`) - FastAPI service for balance team queries
+- **Dashboard** (`static/index.html`) - Web UI for browsing card stats
 
 ## Configuration
 
-Copy `config.ini.example` to `config.ini` and edit:
-
-```ini
-[database]
-host = localhost
-port = 3306
-user = gemp
-password = your_password
-name = gemp_db
-
-[paths]
-replay_base = /replay
-mapping_file = blueprintMapping.txt
-```
-
-Alternatively, use environment variables:
-- `GEMP_DB_HOST`, `GEMP_DB_PORT`, `GEMP_DB_USER`, `GEMP_DB_PASSWORD`, `GEMP_DB_NAME`
-- `GEMP_REPLAY_PATH`, `GEMP_MAPPING_FILE`
-
-For the API, also set:
-- `GEMP_ANALYTICS_ADMIN_KEY` - API key for admin endpoints
+All configuration is held in the environment variables stored in .env. See that file for details.
 
 ## Usage
+
+This is for manual usage calling the python scripts directly.  When the app is hosted via docker, use the UI to access it.
 
 ### Ingestion
 ```bash
@@ -112,17 +103,22 @@ POST /api/admin/precompute     # Trigger pre-computation (admin)
 
 Only games in these formats are processed:
 
-- Fellowship Block (PC)
-- Movie Block (PC)
-- Expanded (PC)
-- Fellowship Block
-- Movie Block
-- Expanded
-- Towers Standard
-- Towers Block
-- Limited - FOTR
-- Limited - TTT
-- Limited - ROTK
+- PC Formats
+    - Fellowship Block (PC)
+    - Movie Block (PC)
+    - Expanded (PC)
+- Main Decipher Formats
+    - Fellowship Block
+    - Movie Block
+    - Expanded
+    - Towers Standard
+    - Towers Block
+- Sealed Formats
+    - Limited - FOTR
+    - Limited - TTT
+    - Limited - ROTK
+    - Limited - WOTR
+    - Limited - TH
 
 ## Classification Tiers
 
@@ -141,7 +137,7 @@ Only games in these formats are processed:
 
 - **inclusion_wr**: Win rate when card is in deck (regardless of whether played)
 - **played_wr**: Win rate when card was actually played during the game
-- **priority**: `games * (inclusion_wr - 0.5)` - impact score for balance analysis
+- **priority**: `games × (inclusion_wr - 0.5)` - impact score
 
 ## Blueprint Normalization
 
@@ -154,29 +150,16 @@ Card IDs are normalized to canonical form:
 
 - **was_played accuracy**: Until metadataVersion >= 3, attachments (weapons, armor, etc.) may not be counted as "played" due to a tracking bug. Inclusion stats are accurate for all cards.
 
-## Re-processing
+### Re-processing
 
-To re-process games after logic changes:
+After logic changes:
 1. Increment `PROCESSING_VERSION` in `ingest.py`
-2. Delete from `game_analysis` where `processing_version < NEW_VERSION`
-3. Run ingestion normally
+2. Clear old data:
+   ```sql
+   DELETE FROM game_analysis WHERE processing_version < 2;
+   ```
+3. Re-run ingestion and precompute
 
-```sql
-DELETE FROM game_analysis WHERE processing_version < 2;
-```
-
-The CASCADE constraint will clean up `game_deck_cards` automatically.
-Then run `python precompute.py --rebuild` to regenerate stats.
-
-## Cron Setup
-
-```cron
-# Daily ingestion at 2 AM
-0 2 * * * cd /path/to/game_analytics && python ingest.py >> /var/log/gemp_ingest.log 2>&1
-
-# Daily pre-computation at 3 AM
-0 3 * * * cd /path/to/game_analytics && python precompute.py >> /var/log/gemp_precompute.log 2>&1
-```
 
 ## File Structure
 
@@ -186,9 +169,6 @@ game_analytics/
 ├── precompute.py          # Stats pre-computation
 ├── blueprint_normalizer.py
 ├── config.py
-├── config.ini
-├── config.ini.example
-├── blueprintMapping.txt
 ├── schema.sql
 ├── requirements.txt
 ├── api/
@@ -207,6 +187,17 @@ game_analytics/
 │       ├── __init__.py
 │       ├── card_stats.py
 │       └── patch_service.py
+├── docker/
+│   ├── .env.example
+│   ├── analytics.Dockerfile
+│   ├── crontab
+│   ├── docker-compose.yml 
+│   ├── entrypoint.sh
+│   └── README.md
+├── logs/
+├── static/
+│   └── index.html
 ├── test_normalizer.py
-└── README.md
+├── README.md
+└── LICENSE
 ```

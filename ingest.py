@@ -54,6 +54,8 @@ TARGET_FORMATS = frozenset([
     "Limited - FOTR",
     "Limited - TTT",
     "Limited - ROTK",
+    "Limited - WOTR",
+    "Limited - TH",
 ])
 
 DECISIVE_REASONS = frozenset([
