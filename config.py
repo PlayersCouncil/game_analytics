@@ -33,8 +33,8 @@ class Config:
         self.db_name = self._get('database', 'name', 'GEMP_DB_NAME', 'gemp_db')
         
         # File paths
-        self.replay_base_path = self._get('paths', 'replay_base', 'GEMP_REPLAY_PATH', '/replay')
-        self.mapping_file = self._get('paths', 'mapping_file', 'GEMP_MAPPING_FILE', 'blueprintMapping.txt')
+        self.replay_base_path = self._get('paths', 'replay_base', 'REPLAY_PATH', '/replay')
+        self.mapping_file = self._get('paths', 'mapping_file', 'MAPPING_FILE', 'blueprintMapping.txt')
     
     def _get(self, section: str, key: str, env_var: str, default: str) -> str:
         """

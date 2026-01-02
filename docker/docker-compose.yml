@@ -15,7 +15,7 @@ services:
     volumes:
       # Replay summaries - READ ONLY to avoid any risk of data loss
       - type: bind
-        source: ${REPLAY_PATH}
+        source: ${GEMP_REPLAY_PATH}
         target: /replay
         read_only: true
       # Logs - persist outside container
@@ -24,7 +24,7 @@ services:
         target: /app/logs
       # Blueprint mapping - can be updated without rebuild
       - type: bind
-        source: ../blueprintMapping.txt
+        source: ${GEMP_MAPPING_FILE}
         target: /app/blueprintMapping.txt
         read_only: true
     environment:
@@ -33,8 +33,8 @@ services:
       - GEMP_DB_USER=${GEMP_DB_USER}
       - GEMP_DB_PASSWORD=${GEMP_DB_PASSWORD}
       - GEMP_DB_NAME=${GEMP_DB_NAME}
-      - GEMP_REPLAY_PATH=/replay
-      - GEMP_MAPPING_FILE=/app/blueprintMapping.txt
+      - REPLAY_PATH=/replay
+      - MAPPING_FILE=/app/blueprintMapping.txt
       - GEMP_ANALYTICS_ADMIN_KEY=${ANALYTICS_ADMIN_KEY}
     networks:
       - gemp_network
