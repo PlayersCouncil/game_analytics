@@ -15,6 +15,7 @@
             --positive: #4ade80;
             --negative: #f87171;
             --neutral: #fbbf24;
+            --played-bar: #d4a574;
         }
         
         * {
@@ -94,6 +95,20 @@
             cursor: not-allowed;
         }
         
+        button.secondary {
+            background: #333;
+            border: 1px solid #555;
+        }
+        
+        button.secondary:hover {
+            background: #444;
+        }
+        
+        button.secondary.active {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+        }
+        
         .stats-summary {
             background: var(--bg-card);
             padding: 15px 20px;
@@ -101,6 +116,7 @@
             margin-bottom: 20px;
             display: flex;
             gap: 30px;
+            flex-wrap: wrap;
             font-size: 14px;
         }
         
@@ -110,6 +126,12 @@
         
         .stats-summary strong {
             color: var(--text);
+        }
+        
+        .query-time {
+            margin-left: auto;
+            color: var(--text-dim);
+            font-size: 12px;
         }
         
         .table-container {
@@ -180,13 +202,13 @@
             color: var(--neutral);
         }
         
-        .priority-bar {
+        .bar-cell {
             display: flex;
             align-items: center;
             gap: 8px;
         }
         
-        .priority-bar .bar {
+        .bar-cell .bar {
             width: 60px;
             height: 8px;
             background: #333;
@@ -194,17 +216,21 @@
             overflow: hidden;
         }
         
-        .priority-bar .bar-fill {
+        .bar-cell .bar-fill {
             height: 100%;
             border-radius: 4px;
         }
         
-        .priority-bar .bar-fill.positive {
+        .bar-cell .bar-fill.positive {
             background: var(--positive);
         }
         
-        .priority-bar .bar-fill.negative {
+        .bar-cell .bar-fill.negative {
             background: var(--negative);
+        }
+        
+        .bar-cell .bar-fill.played {
+            background: var(--played-bar);
         }
         
         .loading {
@@ -239,6 +265,16 @@
             height: 16px;
         }
         
+        /* Tooltip styling */
+        .checkbox-group label[title] {
+            border-bottom: 1px dotted var(--text-dim);
+        }
+        
+        .toggle-group {
+            display: flex;
+            gap: 5px;
+        }
+        
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -261,17 +297,25 @@
         <div class="control-group">
             <label>Format</label>
             <select id="format">
-                <option value="Movie Block (PC)">Movie Block (PC)</option>
-                <option value="Fellowship Block (PC)">Fellowship Block (PC)</option>
-                <option value="Expanded (PC)">Expanded (PC)</option>
-                <option value="Movie Block">Movie Block</option>
-                <option value="Fellowship Block">Fellowship Block</option>
-                <option value="Expanded">Expanded</option>
-                <option value="Towers Standard">Towers Standard</option>
-                <option value="Towers Block">Towers Block</option>
-                <option value="Limited - FOTR">Limited - FOTR</option>
-                <option value="Limited - TTT">Limited - TTT</option>
-                <option value="Limited - ROTK">Limited - ROTK</option>
+                <optgroup label="PC Formats">
+                    <option value="Movie Block (PC)">Movie Block (PC)</option>
+                    <option value="Fellowship Block (PC)">Fellowship Block (PC)</option>
+                    <option value="Expanded (PC)">Expanded (PC)</option>
+                </optgroup>
+                <optgroup label="Main Decipher Formats">
+                    <option value="Movie Block">Movie Block</option>
+                    <option value="Fellowship Block">Fellowship Block</option>
+                    <option value="Expanded">Expanded</option>
+                    <option value="Towers Standard">Towers Standard</option>
+                    <option value="Towers Block">Towers Block</option>
+                </optgroup>
+                <optgroup label="Sealed Formats">
+                    <option value="Limited - FOTR">Limited - FOTR</option>
+                    <option value="Limited - TTT">Limited - TTT</option>
+                    <option value="Limited - ROTK">Limited - ROTK</option>
+                    <option value="Limited - WOTR">Limited - WOTR</option>
+                    <option value="Limited - TH">Limited - TH</option>
+                </optgroup>
             </select>
         </div>
         
@@ -293,19 +337,33 @@
         <div class="control-group">
             <label>Outcome Tiers</label>
             <div class="checkbox-group">
-                <label><input type="checkbox" value="1" checked class="outcome-tier"> Decisive</label>
-                <label><input type="checkbox" value="2" checked class="outcome-tier"> Late Concede</label>
-                <label><input type="checkbox" value="3" class="outcome-tier"> Ambiguous</label>
+                <label title="Clear game-ending: Site 9 survival, Ring-bearer corrupted or killed">
+                    <input type="checkbox" value="1" checked class="outcome-tier"> Decisive
+                </label>
+                <label title="Concession or timeout at site 6 or later">
+                    <input type="checkbox" value="2" checked class="outcome-tier"> Late Concede
+                </label>
+                <label title="Early quit, bot errors, or unclear outcome">
+                    <input type="checkbox" value="3" class="outcome-tier"> Ambiguous
+                </label>
             </div>
         </div>
         
         <div class="control-group">
             <label>Competitive Tiers</label>
             <div class="checkbox-group">
-                <label><input type="checkbox" value="1" checked class="competitive-tier"> Casual</label>
-                <label><input type="checkbox" value="2" checked class="competitive-tier"> League</label>
-                <label><input type="checkbox" value="3" checked class="competitive-tier"> Tournament</label>
-                <label><input type="checkbox" value="4" checked class="competitive-tier"> Championship</label>
+                <label title="Unranked pickup games">
+                    <input type="checkbox" value="1" checked class="competitive-tier"> Casual
+                </label>
+                <label title="Scheduled league matches">
+                    <input type="checkbox" value="2" checked class="competitive-tier"> League
+                </label>
+                <label title="Bracket tournament games">
+                    <input type="checkbox" value="3" checked class="competitive-tier"> Tournament
+                </label>
+                <label title="World Championship circuit events">
+                    <input type="checkbox" value="4" checked class="competitive-tier"> Championship
+                </label>
             </div>
         </div>
         
@@ -318,6 +376,21 @@
         <div><span>Cards:</span> <strong id="totalCards">-</strong></div>
         <div><span>Date Range:</span> <strong id="dateRange">-</strong></div>
         <div><span>Filters:</span> <strong id="filterInfo">-</strong></div>
+        <div class="query-time"><span id="queryTime">-</span></div>
+    </div>
+    
+    <div class="controls" style="padding: 10px 20px;">
+        <div class="control-group">
+            <label>Priority Sort</label>
+            <div class="toggle-group">
+                <button id="absToggle" class="secondary active" onclick="toggleAbsSort(true)">
+                    Absolute (Extremes)
+                </button>
+                <button id="signedToggle" class="secondary" onclick="toggleAbsSort(false)">
+                    Signed (OP → UP)
+                </button>
+            </div>
+        </div>
     </div>
     
     <div class="table-container">
@@ -342,6 +415,8 @@
     <script>
         let currentData = [];
         let currentSort = { field: 'priority', asc: false };
+        let useAbsoluteSort = true;
+        let queryStartTime = null;
         
         // Set default dates (last 90 days)
         const today = new Date();
@@ -376,6 +451,17 @@
             });
         }
         
+        function toggleAbsSort(useAbs) {
+            useAbsoluteSort = useAbs;
+            document.getElementById('absToggle').classList.toggle('active', useAbs);
+            document.getElementById('signedToggle').classList.toggle('active', !useAbs);
+            
+            // Re-sort if currently sorting by priority
+            if (currentSort.field === 'priority') {
+                sortAndRender();
+            }
+        }
+        
         function getCheckedValues(className) {
             const checked = [];
             document.querySelectorAll(`.${className}:checked`).forEach(cb => {
@@ -393,6 +479,8 @@
             btn.textContent = 'Loading...';
             errorDiv.style.display = 'none';
             tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
+            
+            queryStartTime = performance.now();
             
             try {
                 const format = document.getElementById('format').value;
@@ -414,6 +502,9 @@
                 }
                 
                 const response = await fetch(url);
+                const queryEndTime = performance.now();
+                const queryDuration = ((queryEndTime - queryStartTime) / 1000).toFixed(2);
+                
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.detail || 'Failed to fetch stats');
@@ -429,6 +520,8 @@
                     `${data.date_range.start || 'all'} to ${data.date_range.end || 'now'}`;
                 document.getElementById('filterInfo').textContent = 
                     `Outcome: ${outcomeTiers.join(',') || 'all'}, Competitive: ${competitiveTiers.join(',') || 'all'}`;
+                document.getElementById('queryTime').textContent = 
+                    `Query: ${queryDuration}s | ${data.total_cards} cards`;
                 
                 sortAndRender();
                 
@@ -451,8 +544,8 @@
                 if (aVal === null) aVal = -Infinity;
                 if (bVal === null) bVal = -Infinity;
                 
-                // For priority, sort by absolute value by default
-                if (currentSort.field === 'priority' && !currentSort.asc) {
+                // For priority with absolute sort enabled
+                if (currentSort.field === 'priority' && useAbsoluteSort) {
                     aVal = Math.abs(aVal);
                     bVal = Math.abs(bVal);
                 }
@@ -479,10 +572,22 @@
             const pct = Math.min(Math.abs(priority) / maxPriority * 100, 100);
             const cls = priority >= 0 ? 'positive' : 'negative';
             return `
-                <div class="priority-bar">
+                <div class="bar-cell">
                     <span>${priority.toFixed(1)}</span>
                     <div class="bar">
                         <div class="bar-fill ${cls}" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function formatPlayed(playedGames, maxPlayed) {
+            const pct = Math.min(playedGames / maxPlayed * 100, 100);
+            return `
+                <div class="bar-cell">
+                    <span>${playedGames.toLocaleString()}</span>
+                    <div class="bar">
+                        <div class="bar-fill played" style="width: ${pct}%"></div>
                     </div>
                 </div>
             `;
@@ -497,6 +602,7 @@
             }
             
             const maxPriority = Math.max(...data.map(d => Math.abs(d.priority)));
+            const maxPlayed = Math.max(...data.map(d => d.played_games));
             
             tbody.innerHTML = data.map(card => `
                 <tr>
@@ -504,7 +610,7 @@
                     <td>${card.games.toLocaleString()}</td>
                     <td>${card.copies.toLocaleString()}</td>
                     <td>${formatWinRate(card.inclusion_wr)}</td>
-                    <td>${card.played_games.toLocaleString()}</td>
+                    <td>${formatPlayed(card.played_games, maxPlayed)}</td>
                     <td>${formatWinRate(card.played_wr)}</td>
                     <td>${formatPriority(card.priority, maxPriority)}</td>
                 </tr>

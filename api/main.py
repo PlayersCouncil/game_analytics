@@ -4,6 +4,7 @@ GEMP Game Analytics API
 FastAPI service for querying card performance statistics.
 """
 
+import logging
 import os
 from pathlib import Path
 from contextlib import contextmanager
@@ -14,6 +15,17 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import mysql.connector
 from mysql.connector import pooling
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('/app/logs/api.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
 
 # Database connection pool
 _db_pool = None
@@ -87,6 +99,7 @@ def health_check():
         conn.close()
         return {"status": "healthy", "database": "connected"}
     except Exception as e:
+        logger.error(f"Health check failed: {e}")
         return {"status": "unhealthy", "database": str(e)}
 
 
@@ -112,3 +125,13 @@ def root():
     if index_path.exists():
         return FileResponse(index_path)
     return {"message": "GEMP Analytics API", "docs": "/docs"}
+
+
+# Admin page
+@app.get("/admin")
+def admin_page():
+    """Serve the admin page."""
+    admin_path = static_dir / "admin.html"
+    if admin_path.exists():
+        return FileResponse(admin_path)
+    return {"message": "Admin page not found", "docs": "/docs"}
