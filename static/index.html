@@ -348,9 +348,11 @@
         }
         
         .culture-icon {
-            width: 20px;
-            height: 20px;
+            width: 50px;
+            height: 50px;
             vertical-align: middle;
+            -webkit-filter: invert(100%); /* Safari/Chrome */
+            filter: invert(100%);
         }
         
         .catalog-status {
@@ -830,10 +832,15 @@
             return `<span class="card-name" data-image="${card.image || ''}">${name}<br>${bp}</span>`;
         }
         
-        function formatCulture(culture) {
+        function formatCulture(culture, name) {
             if (!culture) return '-';
             // Convert culture name to lowercase for SVG filename
             const filename = culture.toLowerCase().replace(/\s+/g, '');
+            filename = filename.replace(/\bwraith/g, 'ringwraith');
+            filename = filename.replace(/-/g, 'site');
+            if(name.includes("The One Ring")) {
+                filename = "ring";
+            }
             return `<img src="/gemp-web/images/cultures/${filename}.svg" alt="${culture}" title="${culture}" class="culture-icon" onerror="this.outerHTML='${culture}'">`;
         }
         
@@ -858,7 +865,7 @@
                 <tr>
                     <td class="card-cell" data-image="${card.image || ''}">${formatCardName(card)}</td>
                     <td>${formatSide(card.side)}</td>
-                    <td class="culture">${formatCulture(card.culture)}</td>
+                    <td class="culture">${formatCulture(card.culture, card.cardName)}</td>
                     <td>${card.games.toLocaleString()}</td>
                     <td>${formatWinRate(card.inclusion_wr)}</td>
                     <td>${formatPlayed(card.played_games, maxPlayed)}</td>
