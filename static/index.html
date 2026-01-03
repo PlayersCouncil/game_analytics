@@ -319,13 +319,14 @@
             position: fixed;
             z-index: 1000;
             pointer-events: none;
+            width: 800px;
+            height: 800px;
         }
-        
+
         .card-popup img {
-            max-width: 800px;
-            max-height: 800px;
-            width: auto;
-            height: auto;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
