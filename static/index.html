@@ -614,7 +614,15 @@
                 
                 if (!response.ok) {
                     const err = await response.json();
-                    throw new Error(err.detail || 'Failed to fetch stats');
+                    let msg = 'Failed to fetch stats';
+                    if (err.detail) {
+                        if (typeof err.detail === 'string') {
+                            msg = err.detail;
+                        } else if (Array.isArray(err.detail)) {
+                            msg = err.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join('; ');
+                        }
+                    }
+                    throw new Error(msg);
                 }
                 
                 const data = await response.json();
