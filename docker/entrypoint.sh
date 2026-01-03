@@ -13,7 +13,7 @@ cron
 # Wait for database to be ready
 echo "Waiting for database connection..."
 for i in {1..30}; do
-    if mysqladmin ping -h"$GEMP_DB_HOST" -P"$GEMP_DB_PORT" -u"$GEMP_DB_USER" -p"$GEMP_DB_PASSWORD" --silent 2>/dev/null; then
+    if mysqladmin ping -h"$GEMP_DB_HOST" -P"$GEMP_DB_PORT" -u"$GEMP_DB_USER" -p"$GEMP_DB_PASSWORD" --silent --skip-ssl 2>/dev/null; then
         echo "Database is ready!"
         break
     fi
