@@ -23,7 +23,7 @@ services:
         source: ../logs
         target: /app/logs
       - type: bind
-         source: ..
+         source: ../../game_analytics
          target: /app
          consistency: consistent
       # Blueprint mapping - can be updated without rebuild
