@@ -308,8 +308,10 @@ def get_unprocessed_games(cursor, limit: Optional[int] = 500) -> list:
           AND gh.format_name IN ({format_placeholders})
           AND gh.win_recording_id IS NOT NULL
           AND gh.lose_recording_id IS NOT NULL
+          AND gh.start_date > '2023-06-20'
         ORDER BY gh.start_date ASC
     """
+    # The date is after metadata version 2
     
     if limit:
         query += f" LIMIT {int(limit)}"
