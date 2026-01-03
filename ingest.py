@@ -202,7 +202,7 @@ def extract_deck_cards(deck_data: dict, normalizer: BlueprintNormalizer) -> list
         cards.append((normalized, 'draw_deck', count))
     
     # Sites (adventure deck)
-    for card_id in deck_data.get('AdventureDeck', deck_data.get('adventureDeck', [])) 
+    for card_id in deck_data.get('AdventureDeck', deck_data.get('adventureDeck', [])):
         normalized = normalizer.normalize(card_id)
         cards.append((normalized, 'site', 1))
     
