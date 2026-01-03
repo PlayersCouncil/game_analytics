@@ -77,6 +77,7 @@ AMBIGUOUS_REASONS = frozenset([
     "Bot got stuck on a decision",
     "Possible loop detected",
     "Invalid decision",
+    "Game cancelled due to error",
     "Last remaining player in game",  # Catch-all, check other reason first
 ])
 
@@ -226,7 +227,7 @@ def extract_played_blueprints(summary: dict, normalizer: BlueprintNormalizer) ->
     
     playedCards contains indices into allCards.
     
-    NOTE: Until metadataVersion >= 3, attachments may be undercounted due to
+    NOTE: Until MetadataVersion >= 3, attachments may be undercounted due to
     a bug where Attached zone cards weren't added to playedCards.
     """
     all_cards = summary.get('allCards', {})
@@ -262,8 +263,8 @@ def load_summary(path: Path) -> Optional[dict]:
             data = json.load(f)
         
         # Validate metadata version
-        if data.get('metadataVersion', 0) < 2:
-            logger.debug(f"Skipping {path}: metadataVersion < 2")
+        if data.get('metadataVersion', data.get('MetadataVersion', 0)) < 2:
+            logger.debug(f"Skipping {path}: MetadataVersion < 2")
             return None
         
         return data
