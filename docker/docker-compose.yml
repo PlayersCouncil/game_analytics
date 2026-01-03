@@ -22,6 +22,7 @@ services:
       - type: bind
         source: ../logs
         target: /app/logs
+        consistency: consistent
       - type: bind
         source: ../../game_analytics
         target: /app
