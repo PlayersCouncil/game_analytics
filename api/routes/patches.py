@@ -7,7 +7,7 @@ from typing import Optional
 
 from ..models import PatchListResponse, BalancePatch, CreatePatchRequest
 from ..services import get_all_patches, create_patch, delete_patch
-from ..main import get_db_cursor, get_db_connection
+from ..main import get_db
 
 router = APIRouter(prefix="/patches", tags=["patches"])
 
@@ -32,9 +32,9 @@ def list_patches(cursor = Depends(get_db_cursor)):
 @router.post("", response_model=BalancePatch, dependencies=[Depends(verify_admin_key)])
 def add_patch(
     request: CreatePatchRequest,
-    cursor = Depends(get_db_cursor),
-    conn = Depends(get_db_connection),
+    db = Depends(get_db),
 ):
+    conn, cursor = db
     """Create a new balance patch marker. Requires admin API key."""
     try:
         patch_id = create_patch(cursor, request.patch_name, request.patch_date, request.notes)
@@ -56,9 +56,9 @@ def add_patch(
 @router.delete("/{patch_id}", dependencies=[Depends(verify_admin_key)])
 def remove_patch(
     patch_id: int,
-    cursor = Depends(get_db_cursor),
-    conn = Depends(get_db_connection),
+    db = Depends(get_db),
 ):
+    conn, cursor = db
     """Delete a balance patch marker. Requires admin API key."""
     deleted = delete_patch(cursor, patch_id)
     conn.commit()

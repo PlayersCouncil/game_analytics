@@ -30,6 +30,15 @@ logger = logging.getLogger(__name__)
 # Database connection pool
 _db_pool = None
 
+def get_db():
+    """Get connection and cursor together (for operations needing commit)."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        yield conn, cursor
+    finally:
+        cursor.close()
+        conn.close()
 
 def get_db_pool():
     """Get or create database connection pool."""
