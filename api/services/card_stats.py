@@ -97,6 +97,12 @@ def fetch_card_stats(
     for row in rows:
         blueprint, games, copies, wins, played_games, played_wins = row
         
+        games = int(games)
+        copies = int(copies)
+        wins = int(wins)
+        played_games = int(played_games)
+        played_wins = int(played_wins)
+
         inclusion_wr = wins / games if games > 0 else 0.0
         played_wr = played_wins / played_games if played_games > 0 else None
         priority = games * (inclusion_wr - 0.5)
