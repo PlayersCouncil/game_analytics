@@ -263,7 +263,7 @@ def load_summary(path: Path) -> Optional[dict]:
             data = json.load(f)
         
         # Validate metadata version
-        if data.get('metadataVersion', data.get('MetadataVersion', 0)) < 2:
+        if data.get('MetadataVersion', data.get('metadataVersion', 0)) < 2:
             logger.debug(f"Skipping {path}: MetadataVersion < 2")
             return None
         
