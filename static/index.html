@@ -328,7 +328,6 @@
             height: 100%;
             object-fit: contain;
             border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
         
         .card-cell {
@@ -859,7 +858,7 @@
         function formatSide(side) {
             if (side === 'free_peoples') return '<span class="side-fp">Free Peoples</span>';
             if (side === 'shadow') return '<span class="side-shadow">Shadow</span>';
-            return '-';
+            return 'None';
         }
         
         function renderTable(data) {
