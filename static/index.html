@@ -322,8 +322,8 @@
         }
         
         .card-popup img {
-            width: 500px;
-            height: auto;
+            height: 560px;
+            width: auto;
             border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }
@@ -906,9 +906,9 @@
                     let left = e.clientX + offset;
                     let top = e.clientY + offset;
                     
-                    // Keep popup on screen (400px wide, ~560px tall)
-                    if (left + 420 > window.innerWidth) {
-                        left = e.clientX - 420 - offset;
+                    // Keep popup on screen (up to 580px wide for horizontal cards, ~580px tall for vertical)
+                    if (left + 600 > window.innerWidth) {
+                        left = e.clientX - 600 - offset;
                     }
                     if (top + 580 > window.innerHeight) {
                         top = window.innerHeight - 590;
