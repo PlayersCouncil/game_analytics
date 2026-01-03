@@ -161,6 +161,10 @@ def classify_competitive_tier(tournament_name: Optional[str], cursor) -> int:
     """
     if not tournament_name or tournament_name.startswith("Casual"):
         return 1
+        
+    # Check leagues
+    if 'Serie' in tournament_name:
+        return 2
     
     # Check tournaments first
     cursor.execute(
@@ -173,14 +177,6 @@ def classify_competitive_tier(tournament_name: Optional[str], cursor) -> int:
         if 'wc' in tournament_id:
             return 4
         return 3
-    
-    # Check leagues
-    cursor.execute(
-        "SELECT 1 FROM league WHERE name = %s LIMIT 1",
-        (tournament_name,)
-    )
-    if cursor.fetchone():
-        return 2
     
     logger.warning(f"Unknown tournament type: {tournament_name}")
     return 1
