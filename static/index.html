@@ -205,20 +205,6 @@
             background: rgba(233, 69, 96, 0.1);
         }
         
-        .card-name {
-            cursor: pointer;
-            position: relative;
-        }
-        
-        .card-name:hover {
-            color: var(--accent);
-        }
-        
-        .card-name .subtitle {
-            color: var(--text-dim);
-            font-size: 1.1rem
-        }
-        
         .blueprint {
             font-family: monospace;
             color: var(--text-dim);
@@ -336,9 +322,35 @@
         }
         
         .card-popup img {
-            max-width: 250px;
-            border-radius: 8px;
+            width: 400px;
+            height: auto;
+            border-radius: 12px;
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        
+        .card-cell {
+            cursor: pointer;
+        }
+        
+        .card-cell:hover {
+            color: var(--accent);
+        }
+        
+        .card-cell .subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem;
+        }
+        
+        .card-cell .blueprint {
+            font-family: monospace;
+            color: var(--text-dim);
+            font-size: 1.1rem;
+        }
+        
+        .culture-icon {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
         }
         
         .catalog-status {
@@ -494,7 +506,7 @@
         <div class="query-time"><span id="queryTime">-</span></div>
     </div>
     
-    <div class="controls" style="padding: 10px 20px;">
+    <div class="controls priority-controls" style="padding: 10px 20px; justify-content: flex-end;">
         <div class="control-group">
             <label>Priority Sort</label>
             <div class="toggle-group">
@@ -713,7 +725,6 @@
                     return {
                         ...card,
                         cardName: info.name || card.blueprint,
-                        subtitle: info.subtitle || '',
                         side: info.side || '',
                         culture: info.culture || '',
                         image: info.image || ''
@@ -819,6 +830,13 @@
             return `<span class="card-name" data-image="${card.image || ''}">${name}<br>${bp}</span>`;
         }
         
+        function formatCulture(culture) {
+            if (!culture) return '-';
+            // Convert culture name to lowercase for SVG filename
+            const filename = culture.toLowerCase().replace(/\s+/g, '');
+            return `<img src="/gemp-js/../../images/cultures/${filename}.svg" alt="${culture}" title="${culture}" class="culture-icon" onerror="this.outerHTML='${culture}'">`;
+        }
+        
         function formatSide(side) {
             if (side === 'free_peoples') return '<span class="side-fp">Free Peoples</span>';
             if (side === 'shadow') return '<span class="side-shadow">Shadow</span>';
@@ -838,9 +856,9 @@
             
             tbody.innerHTML = data.map(card => `
                 <tr>
-                    <td>${formatCardName(card)}</td>
+                    <td class="card-cell" data-image="${card.image || ''}">${formatCardName(card)}</td>
                     <td>${formatSide(card.side)}</td>
-                    <td class="culture">${card.culture || '-'}</td>
+                    <td class="culture">${formatCulture(card.culture)}</td>
                     <td>${card.games.toLocaleString()}</td>
                     <td>${formatWinRate(card.inclusion_wr)}</td>
                     <td>${formatPlayed(card.played_games, maxPlayed)}</td>
@@ -857,9 +875,9 @@
             const popup = document.getElementById('cardPopup');
             const img = document.getElementById('cardImage');
             
-            document.querySelectorAll('.card-name').forEach(el => {
+            document.querySelectorAll('.card-cell').forEach(el => {
                 el.addEventListener('mouseenter', (e) => {
-                    const imageUrl = e.target.dataset.image;
+                    const imageUrl = el.dataset.image;
                     if (imageUrl) {
                         img.src = imageUrl;
                         popup.style.display = 'block';
@@ -872,12 +890,12 @@
                     let left = e.clientX + offset;
                     let top = e.clientY + offset;
                     
-                    // Keep popup on screen
-                    if (left + 260 > window.innerWidth) {
-                        left = e.clientX - 260 - offset;
+                    // Keep popup on screen (400px wide, ~560px tall)
+                    if (left + 420 > window.innerWidth) {
+                        left = e.clientX - 420 - offset;
                     }
-                    if (top + 350 > window.innerHeight) {
-                        top = window.innerHeight - 360;
+                    if (top + 580 > window.innerHeight) {
+                        top = window.innerHeight - 590;
                     }
                     
                     popup.style.left = left + 'px';
