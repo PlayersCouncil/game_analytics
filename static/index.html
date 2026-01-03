@@ -833,14 +833,21 @@
         }
         
         function formatCulture(culture, name) {
-            if (!culture) return '-';
-            // Convert culture name to lowercase for SVG filename
-            let filename = culture.toLowerCase().replace(/\s+/g, '');
-            filename = filename.replace(/\bwraith/g, 'ringwraith');
-            filename = filename.replace(/-/g, 'site');
-            if(name.includes("The One Ring")) {
+            let filename = "";
+            if (!culture) {
+                culture = "Site";
+                filename = "site";
+            }
+            else if(name.includes("The One Ring")) {
+                culture = "The One Ring";
                 filename = "ring";
             }
+            else {
+                // Convert culture name to lowercase for SVG filename
+                filename = culture.toLowerCase().replace(/\s+/g, '');
+                filename = filename.replace(/\bwraith/g, 'ringwraith');
+            }
+
             return `<img src="/gemp-web/images/cultures/${filename}.svg" alt="${culture}" title="${culture}" class="culture-icon" onerror="this.outerHTML='${culture}'">`;
         }
         
