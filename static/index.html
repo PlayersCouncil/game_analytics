@@ -837,7 +837,7 @@
         function formatCardName(card) {
             const name = card.cardName || card.blueprint;
             const bp = `<span class="blueprint">${card.blueprint}</span>`;
-            return `<span class="card-name" data-image="${card.image || ''}">${name}<br>${bp}</span>`;
+            return `<span class="card-name" data-image="${card.image || ''}">${name}  ${bp}</span>`;
         }
         
         function formatCulture(culture, name) {
