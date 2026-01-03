@@ -43,6 +43,30 @@ def run_catalog_rebuild():
     subprocess.run(cmd, check=True)
 
 
+def run_ingest(limit: int = 1000):
+    """Run ingest.py in subprocess."""
+    cmd = [sys.executable, 'ingest.py', '--limit', str(limit)]
+    subprocess.run(cmd, check=True)
+
+
+@router.post("/ingest", dependencies=[Depends(verify_admin_key)])
+def trigger_ingest(
+    background_tasks: BackgroundTasks,
+    limit: int = 1000,
+):
+    """
+    Trigger ingestion of new games from replay summaries.
+    
+    - **limit**: Maximum number of games to process (default 1000)
+    """
+    background_tasks.add_task(run_ingest, limit)
+    
+    return {
+        "status": "started",
+        "message": f"Ingestion started (limit: {limit} games)"
+    }
+
+
 @router.post("/catalog/rebuild", dependencies=[Depends(verify_admin_key)])
 def trigger_catalog_rebuild(background_tasks: BackgroundTasks):
     """

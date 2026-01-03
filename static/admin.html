@@ -458,12 +458,22 @@
         function triggerIngest() {
             if (!confirm('This will ingest up to 1000 new games. Continue?')) return;
             
-            // Note: This needs a new endpoint - for now show how it would work
-            showMessage('opsMessage', 'Ingestion triggered. Check jobs table for progress.');
-            
-            // TODO: Call actual ingest endpoint when available
-            // For now, this would need to be run via docker exec
-            alert('Note: Ingestion currently requires running via container shell:\n\ndocker exec gemp_analytics python ingest.py --limit 1000');
+            fetch('/api/admin/ingest?limit=1000', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey
+                }
+            })
+            .then(r => {
+                if (!r.ok) return r.json().then(e => { throw new Error(e.detail || 'Failed'); });
+                return r.json();
+            })
+            .then(data => {
+                showMessage('opsMessage', data.message + ' Check logs for progress.');
+                setTimeout(refreshStatus, 5000);
+            })
+            .catch(err => showMessage('opsMessage', err.message, true));
         }
         
         function triggerPrecompute(mode) {
