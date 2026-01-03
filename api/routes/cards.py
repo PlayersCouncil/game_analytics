@@ -133,3 +133,12 @@ def compare_card_stats(
         competitive_tiers=competitive_tiers,
         cards=cards[:500],  # Limit response size
     )
+
+
+@router.get("/stats/summary")
+def get_stats_summary(cursor = Depends(get_db_cursor)):
+    """Public summary stats (no auth required)."""
+    cursor.execute("SELECT COUNT(*) FROM game_analysis")
+    total_games = cursor.fetchone()[0]
+    
+    return {"total_games": total_games}

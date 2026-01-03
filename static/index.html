@@ -572,18 +572,24 @@
         
         async function loadCatalog() {
             const status = document.getElementById('catalogStatus');
-            status.textContent = '(loading catalog...)';
+            status.textContent = '(loading...)';
             status.className = 'catalog-status loading';
             
             try {
-                const response = await fetch('/api/catalog');
-                const data = await response.json();
-                catalog = data.cards;
-                status.textContent = `(${data.total} cards)`;
+                // Load catalog for card lookups
+                const catalogResponse = await fetch('/api/catalog');
+                const catalogData = await catalogResponse.json();
+                catalog = catalogData.cards;
+                
+                // Load game count for display
+                const statsResponse = await fetch('/api/stats/summary');
+                const statsData = await statsResponse.json();
+                
+                status.textContent = `(${statsData.total_games.toLocaleString()} games)`;
                 status.className = 'catalog-status loaded';
             } catch (err) {
-                console.error('Failed to load catalog:', err);
-                status.textContent = '(catalog unavailable)';
+                console.error('Failed to load:', err);
+                status.textContent = '(error)';
                 status.className = 'catalog-status error';
             }
         }
