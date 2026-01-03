@@ -135,7 +135,7 @@ def compare_card_stats(
     )
 
 
-@router.get("/stats/summary")
+@router.get("/summary")
 def get_stats_summary(cursor = Depends(get_db_cursor)):
     """Public summary stats (no auth required)."""
     cursor.execute("SELECT COUNT(*) FROM game_analysis")
