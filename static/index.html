@@ -834,7 +834,7 @@
             if (!culture) return '-';
             // Convert culture name to lowercase for SVG filename
             const filename = culture.toLowerCase().replace(/\s+/g, '');
-            return `<img src="/gemp-js/../../images/cultures/${filename}.svg" alt="${culture}" title="${culture}" class="culture-icon" onerror="this.outerHTML='${culture}'">`;
+            return `<img src="/gemp-web/images/cultures/${filename}.svg" alt="${culture}" title="${culture}" class="culture-icon" onerror="this.outerHTML='${culture}'">`;
         }
         
         function formatSide(side) {

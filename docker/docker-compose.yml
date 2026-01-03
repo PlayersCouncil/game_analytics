@@ -37,10 +37,10 @@ services:
         source: ${GEMP_RESOURCES_PATH}
         target: /gemp-resources
         read_only: true
-      # GEMP JS files (PC_Cards.js) for image URL mappings
+      # GEMP Web files (PC_Cards.js) for image URL mappings
       - type: bind
-        source: ${GEMP_JS_PATH}
-        target: /gemp-js
+        source: ${GEMP_WEB_PATH}
+        target: /gemp-web
         read_only: true
     environment:
       - GEMP_DB_HOST=${GEMP_DB_HOST}
@@ -52,7 +52,7 @@ services:
       - MAPPING_FILE=/app/blueprintMapping.txt
       - GEMP_ANALYTICS_ADMIN_KEY=${ANALYTICS_ADMIN_KEY}
       - GEMP_RESOURCES_PATH=/gemp-resources
-      - GEMP_JS_PATH=/gemp-js
+      - GEMP_WEB_PATH=/gemp-web
     networks:
       - gemp_network
     # Resource limits to protect game server

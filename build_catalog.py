@@ -3,7 +3,7 @@
 Build card catalog from GEMP HJSON definitions and PC_Cards.js image mappings.
 
 Usage:
-    python build_catalog.py [--resources /path/to/gemp-resources] [--js /path/to/gemp-js]
+    python build_catalog.py [--resources /path/to/gemp-resources] [--js /path/to/gemp-web]
     
 Populates the card_catalog table with:
 - Card metadata (name, culture, type, side, twilight) from HJSON
@@ -117,7 +117,7 @@ def parse_pc_cards_js(js_path: Path) -> dict:
             ...
         }
     """
-    pc_cards_file = js_path / 'PC_Cards.js'
+    pc_cards_file = js_path / 'js/gemp-022/PC_Cards.js'
     if not pc_cards_file.exists():
         print(f"Warning: PC_Cards.js not found at {pc_cards_file}", file=sys.stderr)
         return {}
@@ -221,7 +221,7 @@ def main():
                         default=Path(os.environ.get('GEMP_RESOURCES_PATH', '/gemp-resources')),
                         help='Path to GEMP resources directory (contains cards/ folder)')
     parser.add_argument('--js', type=Path,
-                        default=Path(os.environ.get('GEMP_JS_PATH', '/gemp-js')),
+                        default=Path(os.environ.get('GEMP_WEB_PATH', '/gemp-web')),
                         help='Path to GEMP JS directory (contains PC_Cards.js)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Parse files but do not write to database')
