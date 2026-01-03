@@ -815,9 +815,8 @@
         
         function formatCardName(card) {
             const name = card.cardName || card.blueprint;
-            const subtitle = card.subtitle ? `<span class="subtitle">, ${card.subtitle}</span>` : '';
             const bp = `<span class="blueprint">${card.blueprint}</span>`;
-            return `<span class="card-name" data-image="${card.image || ''}">${name}${subtitle}<br>${bp}</span>`;
+            return `<span class="card-name" data-image="${card.image || ''}">${name}<br>${bp}</span>`;
         }
         
         function formatSide(side) {

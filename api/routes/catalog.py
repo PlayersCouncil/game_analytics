@@ -27,8 +27,8 @@ def get_catalog(
     Response is cacheable - catalog changes rarely.
     """
     sql = """
-        SELECT blueprint, card_name, subtitle, culture, card_type, 
-               side, twilight_cost, set_number, image_url
+        SELECT blueprint, card_name, culture, card_type, 
+               side, set_number, image_url
         FROM card_catalog
         WHERE 1=1
     """
