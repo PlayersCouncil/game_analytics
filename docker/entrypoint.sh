@@ -23,4 +23,5 @@ done
 
 # Start the FastAPI server
 echo "Starting API server..."
-exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2
+exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2 2>&1 | tee -a /app/logs/api.log &
+tail -f /app/logs/api.log
