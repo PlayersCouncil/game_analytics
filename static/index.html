@@ -499,10 +499,10 @@
             <label>Priority Sort</label>
             <div class="toggle-group">
                 <button id="absToggle" class="secondary active" onclick="toggleAbsSort(true)">
-                    Absolute (Extremes)
+                    Horseshoe
                 </button>
                 <button id="signedToggle" class="secondary" onclick="toggleAbsSort(false)">
-                    Signed (OP → UP)
+                    Full Range
                 </button>
             </div>
         </div>
@@ -820,9 +820,9 @@
         }
         
         function formatSide(side) {
-            if (side === 'free_peoples') return '<span class="side-fp">FP</span>';
+            if (side === 'free_peoples') return '<span class="side-fp">Free Peoples</span>';
             if (side === 'shadow') return '<span class="side-shadow">Shadow</span>';
-            return side || '-';
+            return '-';
         }
         
         function renderTable(data) {
