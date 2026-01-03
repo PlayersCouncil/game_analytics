@@ -23,7 +23,9 @@ def verify_admin_key(x_api_key: Optional[str] = Header(None)):
 
 
 @router.get("", response_model=PatchListResponse)
-def list_patches(cursor = Depends(get_db_cursor)):
+def list_patches(db = Depends(get_db)):
+    conn, cursor = db
+    
     """List all balance patches."""
     patches = get_all_patches(cursor)
     return PatchListResponse(patches=patches)
