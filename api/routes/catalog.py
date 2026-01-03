@@ -57,13 +57,11 @@ def get_catalog(
         blueprint = row[0]
         catalog[blueprint] = {
             "name": row[1],
-            "subtitle": row[2],
-            "culture": row[3],
-            "type": row[4],
-            "side": row[5],
-            "twilight": row[6],
-            "set": row[7],
-            "image": row[8],
+            "culture": row[2],
+            "type": row[3],
+            "side": row[4],
+            "set": row[5],
+            "image": row[6],
         }
     
     return {
@@ -92,11 +90,9 @@ def get_card(
     return {
         "blueprint": row[0],
         "name": row[1],
-        "subtitle": row[2],
-        "culture": row[3],
-        "type": row[4],
-        "side": row[5],
-        "twilight": row[6],
-        "set": row[7],
-        "image": row[8],
+        "culture": row[2],
+        "type": row[3],
+        "side": row[4],
+        "set": row[5],
+        "image": row[6],
     }
