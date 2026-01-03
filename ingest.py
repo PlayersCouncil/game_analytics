@@ -348,8 +348,8 @@ def process_game(
     Returns None if processing fails.
     """
     try:
-        replay_info = summary.get('gameReplayInfo', {})
-        decks = summary.get('decks', {})
+        replay_info = summary.get('GameReplayInfo', {})
+        decks = summary.get('Decks', {})
         
         # Extract site info
         winner_site = replay_info.get('winner_site')
