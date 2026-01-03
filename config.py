@@ -53,3 +53,19 @@ class Config:
         
         # Finally default
         return default
+
+
+def get_db_config() -> dict:
+    """
+    Get database connection config as a dict suitable for mysql.connector.
+    
+    Convenience function for scripts that need DB access outside FastAPI.
+    """
+    config = Config()
+    return {
+        'host': config.db_host,
+        'port': config.db_port,
+        'user': config.db_user,
+        'password': config.db_password,
+        'database': config.db_name,
+    }

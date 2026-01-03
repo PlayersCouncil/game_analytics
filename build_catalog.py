@@ -11,13 +11,12 @@ Populates the card_catalog table with:
 """
 
 import argparse
-import json
-import hjson
 import os
 import re
 import sys
 from pathlib import Path
 
+import hjson
 import mysql.connector
 
 from config import get_db_config
@@ -28,21 +27,11 @@ from config import get_db_config
 # ---------------------------------------------------------------------------
 
 def parse_hjson_file(filepath: Path) -> dict:
-    """
-    Parse an HJSON file into a dict of blueprint -> card data.
-    
-    HJSON is JSON with relaxed syntax:
-    - Comments (// and /* */)
-    - Unquoted keys
-    - Trailing commas
-    - Multi-line strings
-    """
-    content = filepath.read_text(encoding='utf-8')
-        
+    """Parse an HJSON file into a dict of blueprint -> card data."""
     try:
-        data = hjson.loads(content)
-        return data
-    except json.JSONDecodeError as e:
+        content = filepath.read_text(encoding='utf-8')
+        return hjson.loads(content)
+    except Exception as e:
         print(f"Warning: Failed to parse {filepath}: {e}", file=sys.stderr)
         return {}
 
