@@ -126,6 +126,11 @@ static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+# Serve GEMP JS files (culture icons, etc.)
+gemp_web_dir = Path(os.environ.get('GEMP_WEB_PATH', '/gemp-web'))
+if gemp_web_dir.exists():
+    app.mount("/gemp-web", StaticFiles(directory=str(gemp_web_dir)), name="gemp-web")
+    
 
 # Root serves dashboard
 @app.get("/")
