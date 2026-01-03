@@ -835,7 +835,7 @@
         function formatCulture(culture, name) {
             if (!culture) return '-';
             // Convert culture name to lowercase for SVG filename
-            const filename = culture.toLowerCase().replace(/\s+/g, '');
+            let filename = culture.toLowerCase().replace(/\s+/g, '');
             filename = filename.replace(/\bwraith/g, 'ringwraith');
             filename = filename.replace(/-/g, 'site');
             if(name.includes("The One Ring")) {
