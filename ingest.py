@@ -415,7 +415,7 @@ def insert_batch(conn, cursor, processed_games: list, dry_run: bool = False):
     try:
         # Insert game_analysis rows
         analysis_sql = """
-            INSERT INTO game_analysis (
+            INSERT IGNORE INTO game_analysis (
                 game_id, format_name, game_date, duration_seconds,
                 tournament_name, winner_player_id, loser_player_id,
                 outcome_tier, competitive_tier, winner_site, loser_site,
