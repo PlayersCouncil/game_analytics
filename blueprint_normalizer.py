@@ -106,9 +106,9 @@ class BlueprintNormalizer:
         set_num = int(match.group(1))
         card_num = match.group(2)
         
-        # PC errata sets
-        if 50 <= set_num <= 69:
-            set_num -= 50
+        # Defunct PC playtest errata sets
+        if 70 <= set_num <= 89:
+            set_num -= 70
         # Defunct playtest V-sets
         elif 150 <= set_num <= 199:
             set_num -= 50

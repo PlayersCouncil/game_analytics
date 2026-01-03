@@ -149,11 +149,9 @@ CREATE TABLE stats_computation_log (
 CREATE TABLE card_catalog (
   blueprint VARCHAR(20) PRIMARY KEY,
   card_name VARCHAR(100),
-  subtitle VARCHAR(100),
   culture VARCHAR(30),
   card_type VARCHAR(30),
-  side ENUM('free_peoples', 'shadow', 'site'),
-  twilight_cost TINYINT,
+  side ENUM('free_peoples', 'shadow', 'other'),
   set_number SMALLINT,
   image_url VARCHAR(255),
   last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP

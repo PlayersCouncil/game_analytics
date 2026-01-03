@@ -12,6 +12,7 @@ Populates the card_catalog table with:
 
 import argparse
 import json
+import hjson
 import os
 import re
 import sys
@@ -37,46 +38,9 @@ def parse_hjson_file(filepath: Path) -> dict:
     - Multi-line strings
     """
     content = filepath.read_text(encoding='utf-8')
-    
-    # Remove // comments (but not inside strings - simplified approach)
-    # This is a rough approximation; HJSON has edge cases
-    lines = []
-    for line in content.split('\n'):
-        # Find // that's not inside a string (very simplified)
-        in_string = False
-        clean_line = []
-        i = 0
-        while i < len(line):
-            c = line[i]
-            if c == '"' and (i == 0 or line[i-1] != '\\'):
-                in_string = not in_string
-            if not in_string and i < len(line) - 1 and line[i:i+2] == '//':
-                break
-            clean_line.append(c)
-            i += 1
-        lines.append(''.join(clean_line))
-    content = '\n'.join(lines)
-    
-    # Remove /* */ block comments
-    content = re.sub(r'/\*.*?\*/', '', content, flags=re.DOTALL)
-    
-    # Add quotes around unquoted keys (keys followed by :)
-    # Match: start of object or comma, whitespace, unquoted key, colon
-    content = re.sub(
-        r'([\{\,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:',
-        r'\1"\2":',
-        content
-    )
-    
-    # Handle trailing commas before } or ]
-    content = re.sub(r',(\s*[\}\]])', r'\1', content)
-    
-    # Handle multi-line strings (simplified - just join them)
-    # HJSON allows: '''multi\nline'''
-    content = re.sub(r"'''(.*?)'''", lambda m: '"' + m.group(1).replace('\n', '\\n').replace('"', '\\"') + '"', content, flags=re.DOTALL)
-    
+        
     try:
-        data = json.loads(content)
+        data = hjson.loads(content)
         return data
     except json.JSONDecodeError as e:
         print(f"Warning: Failed to parse {filepath}: {e}", file=sys.stderr)
@@ -95,21 +59,38 @@ def extract_card_info(blueprint_id: str, card_data: dict) -> dict:
         side = 'free_peoples'
     elif 'shadow' in side_raw:
         side = 'shadow'
-    elif card_data.get('type', '').lower() == 'site':
-        side = 'site'
     else:
-        side = None
+        side = 'other'
     
     return {
         'blueprint': blueprint_id,
-        'card_name': card_data.get('title', ''),
-        'subtitle': card_data.get('subtitle', ''),
+        'card_name': get_name(card_data),
         'culture': card_data.get('culture', ''),
         'card_type': card_data.get('type', ''),
         'side': side,
-        'twilight_cost': card_data.get('twilight'),
         'set_number': set_number,
     }
+    
+def get_name(card_data: dict) -> str:
+    title = card_data.get('title', '')
+    subtitle = card_data.get('subtitle', '')
+    unique = card_data.get('unique', 'false')
+    
+    dots = ''
+    
+    if(unique == "3"):
+        dots = "∴"
+    elif(unique == "2"):
+        dots = ":"
+    elif(unique == "true" or unique == "1"):
+        dots = "•"
+        
+    name = dots + title
+    
+    if(subtitle != ''):
+        name += ", " + subtitle
+        
+    return name
 
 
 def load_all_hjson(resources_path: Path) -> dict:
@@ -209,36 +190,18 @@ def upsert_catalog(cards: dict):
     conn = mysql.connector.connect(**config)
     cursor = conn.cursor()
     
-    # Ensure table exists with current schema
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS card_catalog (
-            blueprint VARCHAR(20) PRIMARY KEY,
-            card_name VARCHAR(100),
-            subtitle VARCHAR(100),
-            culture VARCHAR(30),
-            card_type VARCHAR(30),
-            side ENUM('free_peoples', 'shadow', 'site'),
-            twilight_cost TINYINT,
-            set_number SMALLINT,
-            image_url VARCHAR(255),
-            last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin
-    """)
-    
     # Upsert each card
     upsert_sql = """
         INSERT INTO card_catalog 
-            (blueprint, card_name, subtitle, culture, card_type, side, twilight_cost, set_number, image_url)
+            (blueprint, card_name, culture, card_type, side, set_number, image_url)
         VALUES 
-            (%(blueprint)s, %(card_name)s, %(subtitle)s, %(culture)s, %(card_type)s, 
-             %(side)s, %(twilight_cost)s, %(set_number)s, %(image_url)s)
+            (%(blueprint)s, %(card_name)s, %(culture)s, %(card_type)s, 
+             %(side)s, %(set_number)s, %(image_url)s)
         ON DUPLICATE KEY UPDATE
             card_name = VALUES(card_name),
-            subtitle = VALUES(subtitle),
             culture = VALUES(culture),
             card_type = VALUES(card_type),
             side = VALUES(side),
-            twilight_cost = VALUES(twilight_cost),
             set_number = VALUES(set_number),
             image_url = VALUES(image_url),
             last_updated = CURRENT_TIMESTAMP
