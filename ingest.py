@@ -439,7 +439,7 @@ def insert_batch(conn, cursor, processed_games: list, dry_run: bool = False):
         
         # Insert game_deck_cards rows
         cards_sql = """
-            INSERT INTO game_deck_cards (
+            INSERT IGNORE INTO game_deck_cards (
                 game_id, player_id, card_blueprint, card_role, card_count, is_winner, was_played
             ) VALUES (%s, %s, %s, %s, %s, %s, %s)
         """
