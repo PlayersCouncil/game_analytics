@@ -145,13 +145,16 @@ CREATE TABLE stats_computation_log (
 
 
 -- Optional: Card catalog for name lookups
--- Can be populated from HJSON or via GEMP API
+-- Populated from HJSON via build_catalog.py
 CREATE TABLE card_catalog (
   blueprint VARCHAR(20) PRIMARY KEY,
   card_name VARCHAR(100),
+  subtitle VARCHAR(100),
   culture VARCHAR(30),
   card_type VARCHAR(30),
-  side ENUM('free_peoples', 'shadow'),
+  side ENUM('free_peoples', 'shadow', 'site'),
   twilight_cost TINYINT,
+  set_number SMALLINT,
+  image_url VARCHAR(255),
   last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;

@@ -37,6 +37,28 @@ def run_precompute(mode: str, target_date: Optional[date] = None):
     subprocess.run(cmd, check=True)
 
 
+def run_catalog_rebuild():
+    """Run build_catalog.py in subprocess."""
+    cmd = [sys.executable, 'build_catalog.py']
+    subprocess.run(cmd, check=True)
+
+
+@router.post("/catalog/rebuild", dependencies=[Depends(verify_admin_key)])
+def trigger_catalog_rebuild(background_tasks: BackgroundTasks):
+    """
+    Trigger rebuild of the card catalog from HJSON files.
+    
+    Parses all HJSON card definitions and PC_Cards.js to update
+    the card_catalog table with names, cultures, and image URLs.
+    """
+    background_tasks.add_task(run_catalog_rebuild)
+    
+    return {
+        "status": "started",
+        "message": "Card catalog rebuild initiated"
+    }
+
+
 @router.post("/precompute", dependencies=[Depends(verify_admin_key)])
 def trigger_precompute(
     request: PrecomputeRequest,

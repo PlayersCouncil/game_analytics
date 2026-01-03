@@ -32,6 +32,16 @@ services:
         source: ${GEMP_MAPPING_FILE}
         target: /app/blueprintMapping.txt
         read_only: true
+      # GEMP card resources (HJSON files) for catalog building
+      - type: bind
+        source: ${GEMP_RESOURCES_PATH}
+        target: /gemp-resources
+        read_only: true
+      # GEMP JS files (PC_Cards.js) for image URL mappings
+      - type: bind
+        source: ${GEMP_JS_PATH}
+        target: /gemp-js
+        read_only: true
     environment:
       - GEMP_DB_HOST=${GEMP_DB_HOST}
       - GEMP_DB_PORT=${GEMP_DB_PORT}
@@ -41,6 +51,8 @@ services:
       - REPLAY_PATH=/replay
       - MAPPING_FILE=/app/blueprintMapping.txt
       - GEMP_ANALYTICS_ADMIN_KEY=${ANALYTICS_ADMIN_KEY}
+      - GEMP_RESOURCES_PATH=/gemp-resources
+      - GEMP_JS_PATH=/gemp-js
     networks:
       - gemp_network
     # Resource limits to protect game server

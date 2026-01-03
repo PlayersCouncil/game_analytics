@@ -16,6 +16,8 @@
             --negative: #f87171;
             --neutral: #fbbf24;
             --played-bar: #d4a574;
+            --fp-color: #6b9bd1;
+            --shadow-color: #c97878;
         }
         
         * {
@@ -154,16 +156,17 @@
         .table-container {
             background: var(--bg-card);
             border-radius: 8px;
-            overflow: hidden;
+            overflow-x: auto;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 900px;
         }
         
         th, td {
-            padding: 12px 15px;
+            padding: 10px 12px;
             text-align: left;
         }
         
@@ -175,6 +178,7 @@
             color: var(--text-dim);
             cursor: pointer;
             user-select: none;
+            white-space: nowrap;
         }
         
         th:hover {
@@ -201,10 +205,36 @@
             background: rgba(233, 69, 96, 0.1);
         }
         
+        .card-name {
+            cursor: pointer;
+            position: relative;
+        }
+        
+        .card-name:hover {
+            color: var(--accent);
+        }
+        
+        .card-name .subtitle {
+            color: var(--text-dim);
+            font-size: 1.1rem
+        }
+        
         .blueprint {
             font-family: monospace;
             color: var(--text-dim);
             font-size: 1.2rem;
+        }
+        
+        .side-fp {
+            color: var(--fp-color);
+        }
+        
+        .side-shadow {
+            color: var(--shadow-color);
+        }
+        
+        .culture {
+            font-size: 1.2rem
         }
         
         .wr-positive {
@@ -226,7 +256,7 @@
         }
         
         .bar-cell .bar {
-            width: 60px;
+            width: 50px;
             height: 8px;
             background: #333;
             border-radius: 4px;
@@ -282,7 +312,6 @@
             height: 16px;
         }
         
-        /* Tooltip styling */
         .checkbox-group label[title] {
             border-bottom: 1px dotted var(--text-dim);
         }
@@ -296,6 +325,38 @@
             display: flex;
             gap: 15px;
             align-items: flex-end;
+        }
+        
+        /* Card image popup */
+        .card-popup {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        
+        .card-popup img {
+            max-width: 250px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        
+        .catalog-status {
+            font-size: 1.2rem
+            color: var(--text-dim);
+            margin-left: 10px;
+        }
+        
+        .catalog-status.loading {
+            color: var(--neutral);
+        }
+        
+        .catalog-status.loaded {
+            color: var(--positive);
+        }
+        
+        .catalog-status.error {
+            color: var(--negative);
         }
         
         @media (max-width: 768px) {
@@ -320,7 +381,7 @@
 </head>
 <body>
     <header>
-        <h1>GEMP Card Analytics</h1>
+        <h1>GEMP Card Analytics <span id="catalogStatus" class="catalog-status"></span></h1>
         <div class="header-links">
             <a href="/docs">API Docs</a>
             <a href="/admin">Admin</a>
@@ -451,19 +512,25 @@
         <table id="statsTable">
             <thead>
                 <tr>
-                    <th data-sort="blueprint">Blueprint</th>
+                    <th data-sort="cardName">Card</th>
+                    <th data-sort="side">Side</th>
+                    <th data-sort="culture">Culture</th>
                     <th data-sort="games" class="sorted">Games</th>
-                    <th data-sort="copies">Copies</th>
-                    <th data-sort="inclusion_wr">Incl. WR</th>
+                    <th data-sort="inclusion_wr">Incl WR</th>
                     <th data-sort="played_games">Played</th>
-                    <th data-sort="played_wr">Played WR</th>
+                    <th data-sort="played_wr">Play WR</th>
                     <th data-sort="priority">Priority</th>
                 </tr>
             </thead>
             <tbody id="statsBody">
-                <tr><td colspan="7" class="loading">Select filters and click Load Stats</td></tr>
+                <tr><td colspan="8" class="loading">Select filters and click Load Stats</td></tr>
             </tbody>
         </table>
+    </div>
+    
+    <!-- Card image popup -->
+    <div id="cardPopup" class="card-popup">
+        <img id="cardImage" src="" alt="Card">
     </div>
 
     <script>
@@ -473,8 +540,10 @@
         let useAbsoluteSort = true;
         let queryStartTime = null;
         let patches = [];
+        let catalog = {};  // Blueprint -> card info
         
-        // Load patches on startup
+        // Load catalog and patches on startup
+        loadCatalog();
         loadPatches();
         
         // Set default dates (last 90 days)
@@ -484,6 +553,24 @@
         
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
         document.getElementById('startDate').value = ninetyDaysAgo.toISOString().split('T')[0];
+        
+        async function loadCatalog() {
+            const status = document.getElementById('catalogStatus');
+            status.textContent = '(loading catalog...)';
+            status.className = 'catalog-status loading';
+            
+            try {
+                const response = await fetch('/api/catalog');
+                const data = await response.json();
+                catalog = data.cards;
+                status.textContent = `(${data.total} cards)`;
+                status.className = 'catalog-status loaded';
+            } catch (err) {
+                console.error('Failed to load catalog:', err);
+                status.textContent = '(catalog unavailable)';
+                status.className = 'catalog-status error';
+            }
+        }
         
         async function loadPatches() {
             try {
@@ -507,29 +594,23 @@
             const select = document.getElementById('patchSelect');
             const idx = select.value;
             
-            if (idx === '') {
-                // Custom range - don't change dates
-                return;
-            }
+            if (idx === '') return;
             
             const patch = patches[parseInt(idx)];
-            const nextPatch = patches[parseInt(idx) - 1]; // patches are sorted newest first
+            const nextPatch = patches[parseInt(idx) - 1];
             
             document.getElementById('startDate').value = patch.patch_date;
             
             if (nextPatch) {
-                // End date is day before next patch
                 const endDate = new Date(nextPatch.patch_date);
                 endDate.setDate(endDate.getDate() - 1);
                 document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
             } else {
-                // Most recent patch - end date is today
                 document.getElementById('endDate').value = today.toISOString().split('T')[0];
             }
         }
         
         function onDateManualChange() {
-            // Reset patch dropdown to "Custom" when dates are manually changed
             document.getElementById('patchSelect').value = '';
         }
         
@@ -563,7 +644,6 @@
             document.getElementById('absToggle').classList.toggle('active', useAbs);
             document.getElementById('signedToggle').classList.toggle('active', !useAbs);
             
-            // Re-sort if currently sorting by priority
             if (currentSort.field === 'priority') {
                 sortAndRender();
             }
@@ -585,7 +665,7 @@
             btn.disabled = true;
             btn.textContent = 'Loading...';
             errorDiv.style.display = 'none';
-            tbody.innerHTML = '<tr><td colspan="7" class="loading">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
             
             queryStartTime = performance.now();
             
@@ -597,7 +677,6 @@
                 const outcomeTiers = getCheckedValues('outcome-tier');
                 const competitiveTiers = getCheckedValues('competitive-tier');
                 
-                // Fetch all cards (high limit), we'll filter by percentage client-side
                 let url = `/api/stats/cards?format=${encodeURIComponent(format)}&limit=5000`;
                 if (startDate) url += `&start=${startDate}`;
                 if (endDate) url += `&end=${endDate}`;
@@ -628,13 +707,21 @@
                 
                 const data = await response.json();
                 
-                // Store all fetched data, sorted by games for percentage filtering
-                allFetchedData = data.cards.sort((a, b) => b.games - a.games);
+                // Enrich with catalog data and sort by games
+                allFetchedData = data.cards.map(card => {
+                    const info = catalog[card.blueprint] || {};
+                    return {
+                        ...card,
+                        cardName: info.name || card.blueprint,
+                        subtitle: info.subtitle || '',
+                        side: info.side || '',
+                        culture: info.culture || '',
+                        image: info.image || ''
+                    };
+                }).sort((a, b) => b.games - a.games);
                 
-                // Apply percentage filter
                 applyPercentageFilter();
                 
-                // Update summary
                 document.getElementById('summary').style.display = 'flex';
                 document.getElementById('dateRange').textContent = 
                     `${data.date_range.start || 'all'} to ${data.date_range.end || 'now'}`;
@@ -646,7 +733,7 @@
             } catch (err) {
                 errorDiv.textContent = err.message;
                 errorDiv.style.display = 'block';
-                tbody.innerHTML = '<tr><td colspan="7" class="loading">Error loading data</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">Error loading data</td></tr>';
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Load Stats';
@@ -656,8 +743,6 @@
         function applyPercentageFilter() {
             const percent = parseInt(document.getElementById('showPercent').value);
             const count = Math.ceil(allFetchedData.length * (percent / 100));
-            
-            // Take top X% by games played
             currentData = allFetchedData.slice(0, count);
             
             document.getElementById('showingCards').textContent = 
@@ -666,7 +751,6 @@
             sortAndRender();
         }
         
-        // Re-filter when percentage changes
         document.getElementById('showPercent').addEventListener('change', () => {
             if (allFetchedData.length > 0) {
                 applyPercentageFilter();
@@ -678,11 +762,9 @@
                 let aVal = a[currentSort.field];
                 let bVal = b[currentSort.field];
                 
-                // Handle nulls
-                if (aVal === null) aVal = -Infinity;
-                if (bVal === null) bVal = -Infinity;
+                if (aVal === null || aVal === undefined) aVal = currentSort.field === 'cardName' ? '' : -Infinity;
+                if (bVal === null || bVal === undefined) bVal = currentSort.field === 'cardName' ? '' : -Infinity;
                 
-                // For priority with absolute sort enabled
                 if (currentSort.field === 'priority' && useAbsoluteSort) {
                     aVal = Math.abs(aVal);
                     bVal = Math.abs(bVal);
@@ -731,11 +813,24 @@
             `;
         }
         
+        function formatCardName(card) {
+            const name = card.cardName || card.blueprint;
+            const subtitle = card.subtitle ? `<span class="subtitle">, ${card.subtitle}</span>` : '';
+            const bp = `<span class="blueprint">${card.blueprint}</span>`;
+            return `<span class="card-name" data-image="${card.image || ''}">${name}${subtitle}<br>${bp}</span>`;
+        }
+        
+        function formatSide(side) {
+            if (side === 'free_peoples') return '<span class="side-fp">FP</span>';
+            if (side === 'shadow') return '<span class="side-shadow">Shadow</span>';
+            return side || '-';
+        }
+        
         function renderTable(data) {
             const tbody = document.getElementById('statsBody');
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="loading">No data found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">No data found</td></tr>';
                 return;
             }
             
@@ -744,15 +839,56 @@
             
             tbody.innerHTML = data.map(card => `
                 <tr>
-                    <td class="blueprint">${card.blueprint}</td>
+                    <td>${formatCardName(card)}</td>
+                    <td>${formatSide(card.side)}</td>
+                    <td class="culture">${card.culture || '-'}</td>
                     <td>${card.games.toLocaleString()}</td>
-                    <td>${card.copies.toLocaleString()}</td>
                     <td>${formatWinRate(card.inclusion_wr)}</td>
                     <td>${formatPlayed(card.played_games, maxPlayed)}</td>
                     <td>${formatWinRate(card.played_wr)}</td>
                     <td>${formatPriority(card.priority, maxPriority)}</td>
                 </tr>
             `).join('');
+            
+            // Add hover handlers for card images
+            setupCardHover();
+        }
+        
+        function setupCardHover() {
+            const popup = document.getElementById('cardPopup');
+            const img = document.getElementById('cardImage');
+            
+            document.querySelectorAll('.card-name').forEach(el => {
+                el.addEventListener('mouseenter', (e) => {
+                    const imageUrl = e.target.dataset.image;
+                    if (imageUrl) {
+                        img.src = imageUrl;
+                        popup.style.display = 'block';
+                    }
+                });
+                
+                el.addEventListener('mousemove', (e) => {
+                    const popup = document.getElementById('cardPopup');
+                    const offset = 15;
+                    let left = e.clientX + offset;
+                    let top = e.clientY + offset;
+                    
+                    // Keep popup on screen
+                    if (left + 260 > window.innerWidth) {
+                        left = e.clientX - 260 - offset;
+                    }
+                    if (top + 350 > window.innerHeight) {
+                        top = window.innerHeight - 360;
+                    }
+                    
+                    popup.style.left = left + 'px';
+                    popup.style.top = top + 'px';
+                });
+                
+                el.addEventListener('mouseleave', () => {
+                    popup.style.display = 'none';
+                });
+            });
         }
     </script>
 </body>

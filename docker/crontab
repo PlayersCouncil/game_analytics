@@ -14,4 +14,7 @@ PATH=/usr/local/bin:/usr/bin:/bin
 # Precompute: 0530 UTC daily (after ingestion completes)
 30 5 * * * cd /app && nice -n 15 ionice -c 2 -n 7 python precompute.py >> /app/logs/precompute.log 2>&1
 
+# Catalog rebuild: 0400 UTC daily (before everything, picks up any HJSON changes)
+0 4 * * * cd /app && nice -n 15 ionice -c 2 -n 7 python build_catalog.py >> /app/logs/catalog.log 2>&1
+
 # Empty line required at end of crontab

@@ -24,4 +24,9 @@ done
 # Start the FastAPI server
 echo "Starting API server..."
 exec uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 2 2>&1 | tee -a /app/logs/api.log &
+
+# Build card catalog in background (non-blocking)
+echo "Building card catalog in background..."
+(cd /app && python build_catalog.py >> /app/logs/catalog.log 2>&1) &
+
 tail -f /app/logs/api.log

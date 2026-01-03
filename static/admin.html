@@ -266,6 +266,10 @@
                     <div class="label">Stat Rows</div>
                 </div>
                 <div class="stat-box">
+                    <div class="value" id="catalogCount">-</div>
+                    <div class="label">Cards in Catalog</div>
+                </div>
+                <div class="stat-box">
                     <div class="value" id="latestDate">-</div>
                     <div class="label">Latest Game</div>
                 </div>
@@ -281,6 +285,7 @@
                 <button onclick="triggerIngest()">Ingest 1000 Games</button>
                 <button onclick="triggerPrecompute('incremental')" class="secondary">Precompute (Yesterday)</button>
                 <button onclick="triggerPrecompute('full_rebuild')" class="secondary">Full Rebuild (Slow!)</button>
+                <button onclick="triggerCatalogRebuild()" class="secondary">Rebuild Card Catalog</button>
             </div>
             
             <h3 style="margin-top: 20px; margin-bottom: 10px; font-size: 14px; color: var(--text-dim);">Recent Jobs</h3>
@@ -399,6 +404,9 @@
             document.getElementById('totalStatRows').textContent = data.total_card_stat_rows.toLocaleString();
             document.getElementById('latestDate').textContent = data.latest_game_date || 'N/A';
             
+            // Load catalog count separately
+            loadCatalogCount();
+            
             const tbody = document.getElementById('jobsBody');
             if (data.recent_computations.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" style="color: var(--text-dim);">No jobs yet</td></tr>';
@@ -413,6 +421,38 @@
                     <td><span class="status-badge ${job.status}">${job.status}</span></td>
                 </tr>
             `).join('');
+        }
+        
+        function loadCatalogCount() {
+            fetch('/api/catalog')
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('catalogCount').textContent = data.total.toLocaleString();
+            })
+            .catch(err => {
+                document.getElementById('catalogCount').textContent = 'Error';
+            });
+        }
+        
+        function triggerCatalogRebuild() {
+            if (!confirm('Rebuild card catalog from HJSON files?')) return;
+            
+            fetch('/api/admin/catalog/rebuild', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey
+                }
+            })
+            .then(r => {
+                if (!r.ok) return r.json().then(e => { throw new Error(e.detail || 'Failed'); });
+                return r.json();
+            })
+            .then(data => {
+                showMessage('opsMessage', 'Card catalog rebuild started. Refresh in a few seconds to see updated count.');
+                setTimeout(loadCatalogCount, 5000);
+            })
+            .catch(err => showMessage('opsMessage', err.message, true));
         }
         
         function triggerIngest() {
