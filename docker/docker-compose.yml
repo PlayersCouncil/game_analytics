@@ -22,6 +22,10 @@ services:
       - type: bind
         source: ../logs
         target: /app/logs
+      - type: bind
+         source: ..
+         target: /app
+         consistency: consistent
       # Blueprint mapping - can be updated without rebuild
       - type: bind
         source: ${GEMP_MAPPING_FILE}

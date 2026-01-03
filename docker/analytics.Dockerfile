@@ -5,6 +5,9 @@ RUN apt-get update && apt-get install -y \
     cron \
     procps \
     default-mysql-client \
+    curl \
+    nano \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for running the app
