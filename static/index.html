@@ -512,10 +512,10 @@
         <div class="control-group">
             <label>Priority Sort</label>
             <div class="toggle-group">
-                <button id="absToggle" class="secondary active" onclick="toggleAbsSort(true)">
+                <button id="absToggle" class="secondary" onclick="toggleAbsSort(true)">
                     Horseshoe
                 </button>
-                <button id="signedToggle" class="secondary" onclick="toggleAbsSort(false)">
+                <button id="signedToggle" class="secondary active" onclick="toggleAbsSort(false)">
                     Full Range
                 </button>
             </div>
@@ -529,11 +529,11 @@
                     <th data-sort="cardName">Card</th>
                     <th data-sort="side">Side</th>
                     <th data-sort="culture">Culture</th>
-                    <th data-sort="games" class="sorted">Games</th>
+                    <th data-sort="games">Games</th>
                     <th data-sort="inclusion_wr">Incl WR</th>
                     <th data-sort="played_games">Played</th>
                     <th data-sort="played_wr">Play WR</th>
-                    <th data-sort="priority">Priority</th>
+                    <th data-sort="priority" class="sorted">Priority</th>
                 </tr>
             </thead>
             <tbody id="statsBody">
