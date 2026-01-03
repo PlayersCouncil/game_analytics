@@ -32,9 +32,25 @@
             padding: 20px;
         }
         
-        h1 {
-            text-align: center;
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: var(--accent);
+        }
+        
+        .header-links a {
+            color: var(--text-dim);
+            text-decoration: none;
+            margin-left: 20px;
+            font-size: 14px;
+        }
+        
+        .header-links a:hover {
             color: var(--accent);
         }
         
@@ -275,6 +291,12 @@
             gap: 5px;
         }
         
+        .date-row {
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+        
         @media (max-width: 768px) {
             .controls {
                 flex-direction: column;
@@ -287,11 +309,22 @@
             select, input {
                 width: 100%;
             }
+            
+            header {
+                flex-direction: column;
+                gap: 10px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>GEMP Card Analytics</h1>
+    <header>
+        <h1>GEMP Card Analytics</h1>
+        <div class="header-links">
+            <a href="/docs">API Docs</a>
+            <a href="/admin">Admin</a>
+        </div>
+    </header>
     
     <div class="controls">
         <div class="control-group">
@@ -320,18 +353,38 @@
         </div>
         
         <div class="control-group">
-            <label>Start Date</label>
-            <input type="date" id="startDate">
+            <label>Patch / Date Range</label>
+            <select id="patchSelect" onchange="onPatchChange()">
+                <option value="">Custom Date Range</option>
+            </select>
+        </div>
+        
+        <div class="date-row">
+            <div class="control-group">
+                <label>Start Date</label>
+                <input type="date" id="startDate" onchange="onDateManualChange()">
+            </div>
+            
+            <div class="control-group">
+                <label>End Date</label>
+                <input type="date" id="endDate" onchange="onDateManualChange()">
+            </div>
         </div>
         
         <div class="control-group">
-            <label>End Date</label>
-            <input type="date" id="endDate">
+            <label title="What portion of the card pool to display, sorted by games played">Show Cards</label>
+            <select id="showPercent">
+                <option value="10">Top 10%</option>
+                <option value="20">Top 20%</option>
+                <option value="50" selected>Top 50%</option>
+                <option value="75">Top 75%</option>
+                <option value="100">All Cards</option>
+            </select>
         </div>
         
         <div class="control-group">
-            <label>Min Games</label>
-            <input type="number" id="minGames" value="10" min="1" max="1000">
+            <label title="Minimum games for statistical significance">Min Games</label>
+            <input type="number" id="minGames" value="5" min="1" max="100">
         </div>
         
         <div class="control-group">
@@ -373,7 +426,7 @@
     <div id="error" class="error" style="display: none;"></div>
     
     <div id="summary" class="stats-summary" style="display: none;">
-        <div><span>Cards:</span> <strong id="totalCards">-</strong></div>
+        <div><span>Showing:</span> <strong id="showingCards">-</strong></div>
         <div><span>Date Range:</span> <strong id="dateRange">-</strong></div>
         <div><span>Filters:</span> <strong id="filterInfo">-</strong></div>
         <div class="query-time"><span id="queryTime">-</span></div>
@@ -414,9 +467,14 @@
 
     <script>
         let currentData = [];
-        let currentSort = { field: 'priority', asc: false };
+        let allFetchedData = [];
+        let currentSort = { field: 'games', asc: false };
         let useAbsoluteSort = true;
         let queryStartTime = null;
+        let patches = [];
+        
+        // Load patches on startup
+        loadPatches();
         
         // Set default dates (last 90 days)
         const today = new Date();
@@ -425,6 +483,54 @@
         
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
         document.getElementById('startDate').value = ninetyDaysAgo.toISOString().split('T')[0];
+        
+        async function loadPatches() {
+            try {
+                const response = await fetch('/api/patches');
+                const data = await response.json();
+                patches = data.patches.sort((a, b) => new Date(b.patch_date) - new Date(a.patch_date));
+                
+                const select = document.getElementById('patchSelect');
+                patches.forEach((patch, idx) => {
+                    const option = document.createElement('option');
+                    option.value = idx.toString();
+                    option.textContent = `${patch.patch_name} (${patch.patch_date})`;
+                    select.appendChild(option);
+                });
+            } catch (err) {
+                console.error('Failed to load patches:', err);
+            }
+        }
+        
+        function onPatchChange() {
+            const select = document.getElementById('patchSelect');
+            const idx = select.value;
+            
+            if (idx === '') {
+                // Custom range - don't change dates
+                return;
+            }
+            
+            const patch = patches[parseInt(idx)];
+            const nextPatch = patches[parseInt(idx) - 1]; // patches are sorted newest first
+            
+            document.getElementById('startDate').value = patch.patch_date;
+            
+            if (nextPatch) {
+                // End date is day before next patch
+                const endDate = new Date(nextPatch.patch_date);
+                endDate.setDate(endDate.getDate() - 1);
+                document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+            } else {
+                // Most recent patch - end date is today
+                document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            }
+        }
+        
+        function onDateManualChange() {
+            // Reset patch dropdown to "Custom" when dates are manually changed
+            document.getElementById('patchSelect').value = '';
+        }
         
         // Sort handlers
         document.querySelectorAll('th[data-sort]').forEach(th => {
@@ -490,7 +596,8 @@
                 const outcomeTiers = getCheckedValues('outcome-tier');
                 const competitiveTiers = getCheckedValues('competitive-tier');
                 
-                let url = `/api/stats/cards?format=${encodeURIComponent(format)}&limit=500`;
+                // Fetch all cards (high limit), we'll filter by percentage client-side
+                let url = `/api/stats/cards?format=${encodeURIComponent(format)}&limit=5000`;
                 if (startDate) url += `&start=${startDate}`;
                 if (endDate) url += `&end=${endDate}`;
                 if (minGames) url += `&min_games=${minGames}`;
@@ -511,19 +618,21 @@
                 }
                 
                 const data = await response.json();
-                currentData = data.cards;
+                
+                // Store all fetched data, sorted by games for percentage filtering
+                allFetchedData = data.cards.sort((a, b) => b.games - a.games);
+                
+                // Apply percentage filter
+                applyPercentageFilter();
                 
                 // Update summary
                 document.getElementById('summary').style.display = 'flex';
-                document.getElementById('totalCards').textContent = data.total_cards;
                 document.getElementById('dateRange').textContent = 
                     `${data.date_range.start || 'all'} to ${data.date_range.end || 'now'}`;
                 document.getElementById('filterInfo').textContent = 
                     `Outcome: ${outcomeTiers.join(',') || 'all'}, Competitive: ${competitiveTiers.join(',') || 'all'}`;
                 document.getElementById('queryTime').textContent = 
-                    `Query: ${queryDuration}s | ${data.total_cards} cards`;
-                
-                sortAndRender();
+                    `Query: ${queryDuration}s | ${allFetchedData.length} total cards`;
                 
             } catch (err) {
                 errorDiv.textContent = err.message;
@@ -534,6 +643,26 @@
                 btn.textContent = 'Load Stats';
             }
         }
+        
+        function applyPercentageFilter() {
+            const percent = parseInt(document.getElementById('showPercent').value);
+            const count = Math.ceil(allFetchedData.length * (percent / 100));
+            
+            // Take top X% by games played
+            currentData = allFetchedData.slice(0, count);
+            
+            document.getElementById('showingCards').textContent = 
+                `${currentData.length} of ${allFetchedData.length} (${percent}%)`;
+            
+            sortAndRender();
+        }
+        
+        // Re-filter when percentage changes
+        document.getElementById('showPercent').addEventListener('change', () => {
+            if (allFetchedData.length > 0) {
+                applyPercentageFilter();
+            }
+        });
         
         function sortAndRender() {
             const sorted = [...currentData].sort((a, b) => {
@@ -582,7 +711,7 @@
         }
         
         function formatPlayed(playedGames, maxPlayed) {
-            const pct = Math.min(playedGames / maxPlayed * 100, 100);
+            const pct = maxPlayed > 0 ? Math.min(playedGames / maxPlayed * 100, 100) : 0;
             return `
                 <div class="bar-cell">
                     <span>${playedGames.toLocaleString()}</span>
