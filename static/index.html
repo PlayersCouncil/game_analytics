@@ -835,12 +835,14 @@
         function formatCulture(culture, name) {
             let filename = "";
             if (!culture) {
-                culture = "Site";
-                filename = "site";
-            }
-            else if(name.includes("The One Ring")) {
-                culture = "The One Ring";
-                filename = "ring";
+                if(name.includes("The One Ring")) {
+                    culture = "The One Ring";
+                    filename = "ring";
+                }
+                else {
+                    culture = "Site";
+                    filename = "site";
+                }
             }
             else {
                 // Convert culture name to lowercase for SVG filename
