@@ -195,25 +195,25 @@ def extract_deck_cards(deck_data: dict, normalizer: BlueprintNormalizer) -> list
     cards = []
     
     # Draw deck - count duplicates
-    draw_deck = deck_data.get('DrawDeck', [])
+    draw_deck = deck_data.get('DrawDeck', deck_data.get('drawDeck', [])) 
     draw_counts = Counter(draw_deck)
     for card_id, count in draw_counts.items():
         normalized = normalizer.normalize(card_id)
         cards.append((normalized, 'draw_deck', count))
     
     # Sites (adventure deck)
-    for card_id in deck_data.get('AdventureDeck', []):
+    for card_id in deck_data.get('AdventureDeck', deck_data.get('adventureDeck', [])) 
         normalized = normalizer.normalize(card_id)
         cards.append((normalized, 'site', 1))
     
     # Ring-bearer
-    ring_bearer = deck_data.get('RingBearer')
+    ring_bearer = deck_data.get('RingBearer', deck_data.get('ringBearer')) 
     if ring_bearer:
         normalized = normalizer.normalize(ring_bearer)
         cards.append((normalized, 'ring_bearer', 1))
     
     # Ring
-    ring = deck_data.get('Ring')
+    ring = deck_data.get('Ring', deck_data.get('ring')) 
     if ring:
         normalized = normalizer.normalize(ring)
         cards.append((normalized, 'ring', 1))
@@ -230,8 +230,8 @@ def extract_played_blueprints(summary: dict, normalizer: BlueprintNormalizer) ->
     NOTE: Until MetadataVersion >= 3, attachments may be undercounted due to
     a bug where Attached zone cards weren't added to playedCards.
     """
-    all_cards = summary.get('AllCards', {})
-    played_indices = summary.get('PlayedCards', [])
+    all_cards = summary.get('AllCards', summary.get('allCards', {}))
+    played_indices = summary.get('PlayedCards', summary.get('playedCards', []))
     
     played_blueprints = set()
     for idx in played_indices:
@@ -350,8 +350,9 @@ def process_game(
     Returns None if processing fails.
     """
     try:
-        replay_info = summary.get('GameReplayInfo', {})
-        decks = summary.get('Decks', {})
+        
+        replay_info = summary.get('GameReplayInfo', summary.get('gameReplayInfo', {}))
+        decks = summary.get('Decks', summary.get('decks', {}))
         
         # Extract site info
         winner_site = replay_info.get('winner_site')
