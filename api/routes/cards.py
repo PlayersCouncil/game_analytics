@@ -32,7 +32,7 @@ def get_card_stats(
     patch: Optional[str] = Query(None, description="Patch name (overrides start date)"),
     min_games: int = Query(10, ge=1, description="Minimum games for inclusion"),
     sort: str = Query('priority', regex='^(priority|winrate|games)$'),
-    limit: int = Query(100, ge=1, le=1000),
+    limit: int = Query(100, ge=1, le=5000),
     outcome_tier: Optional[str] = Query(None, description="Outcome tiers (comma-separated: 1,2,3)"),
     competitive_tier: Optional[str] = Query(None, description="Competitive tiers (comma-separated: 1,2,3,4)"),
     cursor = Depends(get_db_cursor),
