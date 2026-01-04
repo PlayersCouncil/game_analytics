@@ -153,12 +153,6 @@
             font-size: 1.2rem;
         }
         
-        .table-container {
-            background: var(--bg-card);
-            border-radius: 8px;
-            overflow-x: auto;
-        }
-        
         table {
             width: 100%;
             border-collapse: collapse;
@@ -333,13 +327,14 @@
         
         /* Sticky table header */
         .table-container {
-            max-height: calc(100vh - 100px);
-            overflow-y: auto;
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow-x: auto;
         }
         
         .table-container thead {
             position: sticky;
-            top: 0;
+            top: 60px;
             z-index: 10;
         }
         
