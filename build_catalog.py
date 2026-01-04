@@ -67,11 +67,11 @@ def get_name(card_data: dict) -> str:
     
     dots = ''
     
-    if(unique == "3"):
+    if(unique == "3" or unique == 3):
         dots = "∴"
-    elif(unique == "2"):
+    elif(unique == "2" or unique == 2):
         dots = ":"
-    elif(unique == "true" or unique == "1"):
+    elif(unique == "true" or unique == True or unique == "1" or unique == 1):
         dots = "•"
         
     name = dots + title

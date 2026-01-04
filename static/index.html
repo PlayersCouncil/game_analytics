@@ -61,7 +61,7 @@
             background: var(--bg-card);
             padding: 20px;
             border-radius: 8px;
-            margin-bottom: 5px;
+            margin-bottom: 20px;
             display: flex;
             flex-wrap: wrap;
             gap: 15px;
@@ -151,6 +151,12 @@
             margin-left: auto;
             color: var(--text-dim);
             font-size: 1.2rem;
+        }
+        
+        .table-container {
+            background: var(--bg-card);
+            border-radius: 8px;
+            overflow-x: auto;
         }
         
         table {
@@ -327,13 +333,13 @@
         
         /* Sticky table header */
         .table-container {
-            background: var(--bg-card);
-            border-radius: 8px;
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
         }
         
         .table-container thead {
             position: sticky;
-            top: 120px;
+            top: 0;
             z-index: 10;
         }
         
@@ -447,6 +453,92 @@
         
         .catalog-status.error {
             color: var(--negative);
+        }
+        
+        /* Column filter dropdown */
+        .filter-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .filter-btn {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 2px 4px;
+            font-size: 0.8em;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+        
+        .filter-btn:hover {
+            opacity: 1;
+            color: var(--accent);
+        }
+        
+        .filter-btn.active {
+            opacity: 1;
+            color: var(--accent);
+        }
+        
+        .filter-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--bg-card);
+            border: 1px solid #444;
+            border-radius: 6px;
+            min-width: 180px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+        
+        .filter-dropdown.show {
+            display: block;
+        }
+        
+        .filter-actions {
+            display: flex;
+            gap: 4px;
+            padding: 8px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .filter-actions button {
+            flex: 1;
+            padding: 4px 8px;
+            font-size: 0.85rem;
+        }
+        
+        .filter-options {
+            padding: 8px;
+        }
+        
+        .filter-option {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+        
+        .filter-option:hover {
+            color: var(--accent);
+        }
+        
+        .filter-option input {
+            width: 14px;
+            height: 14px;
+        }
+        
+        th {
+            position: relative;
         }
         
         @media (max-width: 768px) {
@@ -640,6 +732,238 @@
         let queryStartTime = null;
         let patches = [];
         let catalog = {};  // Blueprint -> card info
+        let columnFilters = {};  // columnKey -> ColumnFilter instance
+        
+        // Set number -> display name mapping
+        const setDisplayMap = {
+            0: '0 - Promo',
+            1: '1 - Fellowship of the Ring',
+            2: '2 - Mines of Moria',
+            3: '3 - Realms of the Elf-lords',
+            4: '4 - The Two Towers',
+            5: '5 - Battle of Helm\'s Deep',
+            6: '6 - Ents of Fangorn',
+            7: '7 - Return of the King',
+            8: '8 - Siege of Gondor',
+            9: '9 - Reflections',
+            10: '10 - Mount Doom',
+            11: '11 - Shadows',
+            12: '12 - Black Rider',
+            13: '13 - Bloodlines',
+            14: '14 - Expanded Middle-earth',
+            15: '15 - The Hunters',
+            16: '16 - The Wraith Collection',
+            17: '17 - Rise of Saruman',
+            18: '18 - Treachery & Deceit',
+            19: '19 - Ages End',
+            // PC Sets
+            50: '50 - Hobbit Draft',
+            51: '51 - Second Edition',
+            52: '52 - Promotion',
+            53: '53 - Legends Masterworks', 
+            54: '54 - The Hobbit',
+            55: '55 - Desolation of Smaug',
+            56: '56 - Battle of Five Armies',
+            57: '57 - Oversized',
+            59: '59 - Age\'s End: Masterworks',
+            100: 'V0 - PC Errata',
+            101: 'V1 - Shadow of the Past',
+            102: 'V2 - Keepers of the Golden Wood',
+            103: 'V3 - Fell Deeds Awake',
+        };
+        
+        function getSetDisplay(setNum) {
+            return setDisplayMap[setNum] || `Set ${setNum}`;
+        }
+        
+        // Column Filter Class
+        class ColumnFilter {
+            constructor(columnKey, headerSelector, getValueFn, getDisplayFn = null) {
+                this.columnKey = columnKey;
+                this.headerEl = document.querySelector(headerSelector);
+                this.getValue = getValueFn;
+                this.getDisplay = getDisplayFn || (v => v || '(empty)');
+                this.selectedValues = new Set();
+                this.allValues = [];
+                this.isAllSelected = true;
+                this.dropdown = null;
+                
+                this.setupUI();
+            }
+            
+            setupUI() {
+                if (!this.headerEl) return;
+                
+                // Wrap header content
+                const originalContent = this.headerEl.innerHTML;
+                this.headerEl.innerHTML = `
+                    <div class="filter-header">
+                        <span class="header-text">${originalContent}</span>
+                        <button class="filter-btn" title="Filter">▼</button>
+                    </div>
+                    <div class="filter-dropdown"></div>
+                `;
+                
+                this.filterBtn = this.headerEl.querySelector('.filter-btn');
+                this.dropdown = this.headerEl.querySelector('.filter-dropdown');
+                
+                // Toggle dropdown on button click (stop propagation to prevent sort)
+                this.filterBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleDropdown();
+                });
+                
+                // Close dropdown when clicking elsewhere
+                document.addEventListener('click', (e) => {
+                    if (!this.headerEl.contains(e.target)) {
+                        this.closeDropdown();
+                    }
+                });
+            }
+            
+            populate(data) {
+                // Extract unique values
+                const valueSet = new Set();
+                data.forEach(row => {
+                    const val = this.getValue(row);
+                    if (val !== null && val !== undefined) {
+                        valueSet.add(val);
+                    }
+                });
+                
+                this.allValues = Array.from(valueSet).sort((a, b) => {
+                    const dispA = this.getDisplay(a);
+                    const dispB = this.getDisplay(b);
+                    return String(dispA).localeCompare(String(dispB), undefined, {numeric: true});
+                });
+                
+                // Select all by default
+                this.selectedValues = new Set(this.allValues);
+                this.isAllSelected = true;
+                this.updateButtonState();
+                this.renderDropdown();
+            }
+            
+            renderDropdown() {
+                if (!this.dropdown) return;
+                
+                const optionsHtml = this.allValues.map(val => `
+                    <label class="filter-option">
+                        <input type="checkbox" value="${val}" ${this.selectedValues.has(val) ? 'checked' : ''}>
+                        ${this.getDisplay(val)}
+                    </label>
+                `).join('');
+                
+                this.dropdown.innerHTML = `
+                    <div class="filter-actions">
+                        <button class="secondary" onclick="columnFilters['${this.columnKey}'].selectAll()">All</button>
+                        <button class="secondary" onclick="columnFilters['${this.columnKey}'].selectNone()">None</button>
+                    </div>
+                    <div class="filter-options">${optionsHtml}</div>
+                `;
+                
+                // Add change listeners to checkboxes
+                this.dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.addEventListener('change', (e) => {
+                        e.stopPropagation();
+                        const val = this.parseValue(cb.value);
+                        if (cb.checked) {
+                            this.selectedValues.add(val);
+                        } else {
+                            this.selectedValues.delete(val);
+                        }
+                        this.isAllSelected = this.selectedValues.size === this.allValues.length;
+                        this.updateButtonState();
+                        applyFiltersAndRender();
+                    });
+                });
+            }
+            
+            parseValue(strVal) {
+                // Try to return original type (number vs string)
+                const num = Number(strVal);
+                if (!isNaN(num) && this.allValues.includes(num)) {
+                    return num;
+                }
+                return strVal;
+            }
+            
+            selectAll() {
+                this.selectedValues = new Set(this.allValues);
+                this.isAllSelected = true;
+                this.updateButtonState();
+                this.renderDropdown();
+                applyFiltersAndRender();
+            }
+            
+            selectNone() {
+                this.selectedValues.clear();
+                this.isAllSelected = false;
+                this.updateButtonState();
+                this.renderDropdown();
+                applyFiltersAndRender();
+            }
+            
+            toggleDropdown() {
+                this.dropdown.classList.toggle('show');
+            }
+            
+            closeDropdown() {
+                this.dropdown.classList.remove('show');
+            }
+            
+            updateButtonState() {
+                if (this.filterBtn) {
+                    this.filterBtn.classList.toggle('active', !this.isAllSelected);
+                }
+            }
+            
+            isVisible(row) {
+                if (this.isAllSelected) return true;
+                const val = this.getValue(row);
+                return this.selectedValues.has(val);
+            }
+        }
+        
+        // Initialize column filters after DOM ready
+        function initColumnFilters() {
+            columnFilters = {
+                side: new ColumnFilter('side', 'th[data-sort="side"]', 
+                    row => row.side,
+                    val => val === 'free_peoples' ? 'Free Peoples' : val === 'shadow' ? 'Shadow' : val || '(none)'
+                ),
+                culture: new ColumnFilter('culture', 'th[data-sort="culture"]',
+                    row => row.culture,
+                    val => val || '(none)'
+                ),
+                set: new ColumnFilter('set', 'th[data-sort="cardName"]',
+                    row => row.setNumber,
+                    val => getSetDisplay(val)
+                )
+            };
+        }
+        
+        // Call after DOM ready
+        initColumnFilters();
+        
+        function applyFiltersAndRender() {
+            // Apply percentage filter first
+            const percent = parseInt(document.getElementById('showPercent').value);
+            const count = Math.ceil(allFetchedData.length * (percent / 100));
+            let filtered = allFetchedData.slice(0, count);
+            
+            // Apply column filters
+            Object.values(columnFilters).forEach(filter => {
+                filtered = filtered.filter(row => filter.isVisible(row));
+            });
+            
+            currentData = filtered;
+            
+            document.getElementById('showingCards').textContent = 
+                `${currentData.length} of ${allFetchedData.length} (${percent}%)`;
+            
+            sortAndRender();
+        }
         
         // Load catalog and patches on startup
         loadCatalog();
@@ -820,11 +1144,17 @@
                         cardName: info.name || card.blueprint,
                         side: info.side || '',
                         culture: info.culture || '',
+                        setNumber: info.set,
                         image: info.image || ''
                     };
                 }).sort((a, b) => b.games - a.games);
                 
-                applyPercentageFilter();
+                // Populate column filters with current data
+                Object.values(columnFilters).forEach(filter => {
+                    filter.populate(allFetchedData);
+                });
+                
+                applyFiltersAndRender();
                 
                 document.getElementById('summary').style.display = 'flex';
                 document.getElementById('dateRange').textContent = 
@@ -844,20 +1174,9 @@
             }
         }
         
-        function applyPercentageFilter() {
-            const percent = parseInt(document.getElementById('showPercent').value);
-            const count = Math.ceil(allFetchedData.length * (percent / 100));
-            currentData = allFetchedData.slice(0, count);
-            
-            document.getElementById('showingCards').textContent = 
-                `${currentData.length} of ${allFetchedData.length} (${percent}%)`;
-            
-            sortAndRender();
-        }
-        
         document.getElementById('showPercent').addEventListener('change', () => {
             if (allFetchedData.length > 0) {
-                applyPercentageFilter();
+                applyFiltersAndRender();
             }
         });
         
