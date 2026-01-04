@@ -42,6 +42,10 @@ def extract_card_info(blueprint_id: str, card_data: dict) -> dict:
     parts = blueprint_id.split('_')
     set_number = int(parts[0]) if parts else 0
     
+    culture = card_data.get('culture', '').title()
+    if 'Wraith' in culture:
+        culture = 'Ringwraith'
+    
     # Normalize side
     side_raw = card_data.get('side', '').lower().replace(' ', '_')
     if 'free' in side_raw:
@@ -49,13 +53,18 @@ def extract_card_info(blueprint_id: str, card_data: dict) -> dict:
     elif 'shadow' in side_raw:
         side = 'shadow'
     else:
-        side = 'other'
+        if culture in ['Dwarven', 'Elven', 'Gandalf', 'Gondor', 'Rohan', 'Shire']:
+            side = 'free_peoples'
+        elif culture in ['Dunland', 'Isengard', 'Moria', 'Raider', 'Ringwraith', 'Sauron', 'Men', 'Orc', 'Uruk-hai']:
+            side = 'shadow'
+        else:
+            side = 'other'
     
     return {
         'blueprint': blueprint_id,
         'card_name': get_name(card_data),
-        'culture': card_data.get('culture', ''),
-        'card_type': card_data.get('type', ''),
+        'culture': culture,
+        'card_type': card_data.get('type', '').title(),
         'side': side,
         'set_number': set_number,
     }
