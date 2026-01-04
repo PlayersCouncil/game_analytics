@@ -1400,6 +1400,10 @@
         // Search functionality
         let searchMatches = [];
         let currentMatchIndex = -1;
+
+        function normalizeForSearch(str) {
+            return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        }
         
         function handleSearchKeyup(event) {
             if (event.key === 'Enter') {
@@ -1414,7 +1418,7 @@
         }
         
         function performSearch() {
-            const query = document.getElementById('cardSearch').value.toLowerCase().trim();
+            const query = normalizeForSearch(document.getElementById('cardSearch').value.trim());
             const rows = document.querySelectorAll('#statsBody tr');
             
             // Clear previous highlights
@@ -1430,7 +1434,7 @@
             // Find matching rows
             rows.forEach((row, index) => {
                 const cardCell = row.querySelector('.card-cell');
-                if (cardCell && cardCell.textContent.toLowerCase().includes(query)) {
+                if (cardCell && normalizeForSearch(cardCell.textContent).includes(query)) {
                     searchMatches.push(row);
                 }
             });
