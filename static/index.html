@@ -30,9 +30,12 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-dark);
             color: var(--text);
-            min-height: 100vh;
+            height: 100vh;
             padding: 20px;
             font-size: 120%;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
         
         header {
@@ -157,7 +160,9 @@
             background: var(--bg-card);
             border-radius: 8px;
             overflow-x: auto;
+            overflow-y: auto;
             min-height: 400px;
+            flex: 1;
         }
         
         table {
@@ -182,10 +187,16 @@
             white-space: nowrap;
         }
         
-        /* Min-width for columns with filters */
+        /* Min-width for all columns to prevent jumping when filtered */
         th[data-sort="cardName"] { min-width: 180px; }
         th[data-sort="side"] { min-width: 100px; }
         th[data-sort="culture"] { min-width: 110px; }
+        th[data-sort="games"] { min-width: 80px; }
+        th[data-sort="inclusion_wr"] { min-width: 85px; }
+        th[data-sort="unique_players"] { min-width: 90px; }
+        th[data-sort="played_games"] { min-width: 90px; }
+        th[data-sort="played_wr"] { min-width: 85px; }
+        th[data-sort="priority"] { min-width: 100px; }
         
         th:hover {
             color: var(--accent);
@@ -342,11 +353,6 @@
         }
         
         /* Sticky table header */
-        .table-container {
-            max-height: calc(100vh - 100px);
-            overflow-y: auto;
-        }
-        
         .table-container thead {
             position: sticky;
             top: 0;
@@ -397,6 +403,17 @@
             color: var(--text-dim);
             font-size: 1rem;
             min-width: 60px;
+        }
+        
+        .table-nav {
+            display: flex;
+            gap: 4px;
+            margin-left: 10px;
+        }
+        
+        .table-nav button {
+            padding: 6px 10px;
+            font-size: 1rem;
         }
         
         .highlight-row {
@@ -706,6 +723,10 @@
                     <button class="secondary" onclick="searchNext()">▼</button>
                 </div>
                 <span class="search-count" id="searchCount"></span>
+                <div class="table-nav">
+                    <button class="secondary" onclick="scrollToTop()" title="Go to top">⤒</button>
+                    <button class="secondary" onclick="scrollToBottom()" title="Go to bottom">⤓</button>
+                </div>
             </div>
             <div class="control-group">
                 <label>Priority Sort</label>
@@ -1353,12 +1374,13 @@
                 el.addEventListener('mousemove', (e) => {
                     const popup = document.getElementById('cardPopup');
                     const offset = 15;
-                    let left = e.clientX + offset;
+                    // Default to left of cursor
+                    let left = e.clientX - 800 - offset;
                     let top = e.clientY + offset;
                     
-                    // Keep popup on screen (up to 580px wide for horizontal cards, ~580px tall for vertical)
-                    if (left + 800 > window.innerWidth) {
-                        left = e.clientX - 800 - offset;
+                    // If would go off left edge, flip to right
+                    if (left < 0) {
+                        left = e.clientX + offset;
                     }
                     if (top + 800 > window.innerHeight) {
                         top = window.innerHeight - 800;
@@ -1451,6 +1473,16 @@
             if (searchMatches.length === 0) return;
             currentMatchIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
             highlightAndScroll();
+        }
+        
+        function scrollToTop() {
+            const container = document.querySelector('.table-container');
+            container.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        
+        function scrollToBottom() {
+            const container = document.querySelector('.table-container');
+            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
         }
     </script>
 </body>

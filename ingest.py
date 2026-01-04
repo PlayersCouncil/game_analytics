@@ -81,6 +81,26 @@ AMBIGUOUS_REASONS = frozenset([
     "Last remaining player in game",  # Catch-all, check other reason first
 ])
 
+# Known bot usernames (case-insensitive comparison)
+KNOWN_BOTS = frozenset([
+    "~bot",
+    "aragornbot",
+    "gandalfbot",
+])
+
+
+def is_bot_player(username: str) -> bool:
+    """
+    Check if a username belongs to a bot.
+    
+    Returns True if:
+    - Username contains '~' character (convention for bot accounts)
+    - Username matches a known bot name (case-insensitive)
+    """
+    if '~' in username:
+        return True
+    return username.lower() in KNOWN_BOTS
+
 
 @dataclass
 class GameRecord:
@@ -507,9 +527,14 @@ def main():
         
         # Process in batches
         processed_batch = []
-        stats = {'processed': 0, 'skipped': 0, 'errors': 0}
+        stats = {'processed': 0, 'skipped': 0, 'errors': 0, 'bots': 0}
         
         for i, game in enumerate(games):
+            # Skip games involving bots
+            if is_bot_player(game.winner) or is_bot_player(game.loser):
+                stats['bots'] += 1
+                continue
+            
             # Load summary file
             summary_path = construct_summary_path(game, Path(config.replay_base_path))
             summary = load_summary(summary_path)
@@ -543,7 +568,7 @@ def main():
         
         logger.info(
             f"Complete. Processed: {stats['processed']}, "
-            f"Skipped: {stats['skipped']}, Errors: {stats['errors']}"
+            f"Skipped: {stats['skipped']}, Bots: {stats['bots']}, Errors: {stats['errors']}"
         )
     
     finally:
