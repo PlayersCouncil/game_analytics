@@ -181,6 +181,11 @@
             white-space: nowrap;
         }
         
+        /* Min-width for columns with filters */
+        th[data-sort="cardName"] { min-width: 180px; }
+        th[data-sort="side"] { min-width: 100px; }
+        th[data-sort="culture"] { min-width: 110px; }
+        
         th:hover {
             color: var(--accent);
         }
@@ -766,6 +771,14 @@
             return setDisplayMap[setNum] || `Set ${setNum}`;
         }
         
+        // Normalize errata sets to their base sets (50-69 → 0-19)
+        function normalizeSetNumber(setNum) {
+            if (setNum >= 50 && setNum <= 69) {
+                return setNum - 50;
+            }
+            return setNum;
+        }
+        
         // Column Filter Class
         class ColumnFilter {
             constructor(columnKey, headerSelector, getValueFn, getDisplayFn = null) {
@@ -789,7 +802,7 @@
                 this.headerEl.innerHTML = `
                     <div class="filter-header">
                         <span class="header-text">${originalContent}</span>
-                        <button class="filter-btn" title="Filter">▼</button>
+                        <button class="filter-btn" title="Filter">☰</button>
                     </div>
                     <div class="filter-dropdown"></div>
                 `;
@@ -801,6 +814,11 @@
                 this.filterBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     this.toggleDropdown();
+                });
+                
+                // Stop propagation on dropdown itself
+                this.dropdown.addEventListener('click', (e) => {
+                    e.stopPropagation();
                 });
                 
                 // Close dropdown when clicking elsewhere
@@ -927,7 +945,7 @@
                     val => val || '(none)'
                 ),
                 set: new ColumnFilter('set', 'th[data-sort="cardName"]',
-                    row => row.setNumber,
+                    row => normalizeSetNumber(row.setNumber),  // Use normalized set for filtering
                     val => getSetDisplay(val)
                 )
             };
