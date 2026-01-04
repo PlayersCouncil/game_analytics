@@ -426,8 +426,8 @@
             position: fixed;
             z-index: 1000;
             pointer-events: none;
-            width: 800px;
-            height: 800px;
+            width: 600px;
+            height: 600px;
         }
 
         .card-popup img {
@@ -1374,16 +1374,17 @@
                 el.addEventListener('mousemove', (e) => {
                     const popup = document.getElementById('cardPopup');
                     const offset = 15;
+                    const size = 600;
                     // Default to left of cursor
-                    let left = e.clientX - 800 - offset;
+                    let left = e.clientX - size - offset;
                     let top = e.clientY + offset;
                     
                     // If would go off left edge, flip to right
                     if (left < 0) {
                         left = e.clientX + offset;
                     }
-                    if (top + 800 > window.innerHeight) {
-                        top = window.innerHeight - 800;
+                    if (top + size > window.innerHeight) {
+                        top = window.innerHeight - size;
                     }
                     
                     popup.style.left = left + 'px';
