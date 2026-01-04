@@ -283,7 +283,10 @@
             <h2>Manual Operations</h2>
             <div id="opsMessage" class="message"></div>
             <div class="form-row">
-                <button onclick="triggerIngest()">Ingest 1000 Games</button>
+                <button onclick="triggerIngest(1000)">Ingest 1,000 Games</button>
+                <button onclick="triggerIngest(10000)">Ingest 10,000 Games</button>
+                <button onclick="triggerIngest(100000)">Ingest 100,000 Games</button>
+
                 <button onclick="triggerPrecompute('incremental')" class="secondary">Precompute (Yesterday)</button>
                 <button onclick="triggerPrecompute('full_rebuild')" class="secondary">Full Rebuild (Slow!)</button>
                 <button onclick="triggerCatalogRebuild()" class="secondary">Rebuild Card Catalog</button>
@@ -455,11 +458,11 @@
             })
             .catch(err => showMessage('opsMessage', err.message, true));
         }
-        
-        function triggerIngest() {
-            if (!confirm('This will ingest up to 1000 new games. Continue?')) return;
+    
+        function triggerIngest(limit) {
+            if (!confirm(`This will ingest up to ${limit.toLocaleString()} new games. Continue?`)) return;
             
-            fetch('/api/admin/ingest?limit=1000', {
+            fetch(`/api/admin/ingest?limit=${limit}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
