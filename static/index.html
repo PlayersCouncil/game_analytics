@@ -285,12 +285,21 @@
             gap: 10px;
         }
         
+        .checkbox-group.vertical {
+            flex-direction: column;
+            gap: 4px;
+        }
+        
         .checkbox-group label {
             display: flex;
             align-items: center;
             gap: 5px;
             font-size: 1.4rem;
             cursor: pointer;
+        }
+        
+        .checkbox-group.vertical label {
+            font-size: 1.2rem;
         }
         
         .checkbox-group input[type="checkbox"] {
@@ -311,6 +320,77 @@
             display: flex;
             gap: 15px;
             align-items: flex-end;
+        }
+        
+        /* Sticky toolbar */
+        .sticky-toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: var(--bg-dark);
+            padding: 10px 0;
+        }
+        
+        /* Sticky table header */
+        .table-container {
+            max-height: calc(100vh - 100px);
+            overflow-y: auto;
+        }
+        
+        .table-container thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .table-container th {
+            background: var(--bg-dark);
+        }
+        
+        /* Search box */
+        .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .search-box input {
+            background: var(--bg-dark);
+            border: 1px solid #333;
+            color: var(--text);
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 1.2rem;
+            width: 200px;
+        }
+        
+        .search-box input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        
+        .search-box input::placeholder {
+            color: var(--text-dim);
+        }
+        
+        .search-nav {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .search-nav button {
+            padding: 6px 10px;
+            font-size: 1rem;
+        }
+        
+        .search-count {
+            color: var(--text-dim);
+            font-size: 1rem;
+            min-width: 60px;
+        }
+        
+        .highlight-row {
+            background: rgba(233, 69, 96, 0.3) !important;
         }
         
         /* Card image popup */
@@ -399,7 +479,6 @@
     <header>
         <h1>GEMP Card Analytics <span id="catalogStatus" class="catalog-status"></span></h1>
         <div class="header-links">
-            <a href="/docs">API Docs</a>
             <a href="/admin">Admin</a>
         </div>
     </header>
@@ -467,7 +546,7 @@
         
         <div class="control-group">
             <label>Outcome Tiers</label>
-            <div class="checkbox-group">
+            <div class="checkbox-group vertical">
                 <label title="Clear game-ending: Site 9 survival, Ring-bearer corrupted or killed">
                     <input type="checkbox" value="1" checked class="outcome-tier"> Decisive
                 </label>
@@ -482,7 +561,7 @@
         
         <div class="control-group">
             <label>Competitive Tiers</label>
-            <div class="checkbox-group">
+            <div class="checkbox-group vertical">
                 <label title="Unranked pickup games">
                     <input type="checkbox" value="1" checked class="competitive-tier"> Casual
                 </label>
@@ -510,16 +589,26 @@
         <div class="query-time"><span id="queryTime">-</span></div>
     </div>
     
-    <div class="controls priority-controls" style="padding: 10px 20px; justify-content: flex-end;">
-        <div class="control-group">
-            <label>Priority Sort</label>
-            <div class="toggle-group">
-                <button id="absToggle" class="secondary" onclick="toggleAbsSort(true)">
-                    Horseshoe
-                </button>
-                <button id="signedToggle" class="secondary active" onclick="toggleAbsSort(false)">
-                    Full Range
-                </button>
+    <div class="sticky-toolbar">
+        <div class="controls priority-controls" style="padding: 10px 20px; justify-content: space-between;">
+            <div class="search-box">
+                <input type="text" id="cardSearch" placeholder="Search cards..." onkeyup="handleSearchKeyup(event)">
+                <div class="search-nav">
+                    <button class="secondary" onclick="searchPrev()">▲</button>
+                    <button class="secondary" onclick="searchNext()">▼</button>
+                </div>
+                <span class="search-count" id="searchCount"></span>
+            </div>
+            <div class="control-group">
+                <label>Priority Sort</label>
+                <div class="toggle-group">
+                    <button id="absToggle" class="secondary" onclick="toggleAbsSort(true)">
+                        Horseshoe
+                    </button>
+                    <button id="signedToggle" class="secondary active" onclick="toggleAbsSort(false)">
+                        Full Range
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -930,6 +1019,85 @@
                     popup.style.display = 'none';
                 });
             });
+        }
+        
+        // Search functionality
+        let searchMatches = [];
+        let currentMatchIndex = -1;
+        
+        function handleSearchKeyup(event) {
+            if (event.key === 'Enter') {
+                if (event.shiftKey) {
+                    searchPrev();
+                } else {
+                    searchNext();
+                }
+            } else {
+                performSearch();
+            }
+        }
+        
+        function performSearch() {
+            const query = document.getElementById('cardSearch').value.toLowerCase().trim();
+            const rows = document.querySelectorAll('#statsBody tr');
+            
+            // Clear previous highlights
+            rows.forEach(row => row.classList.remove('highlight-row'));
+            searchMatches = [];
+            currentMatchIndex = -1;
+            
+            if (!query) {
+                document.getElementById('searchCount').textContent = '';
+                return;
+            }
+            
+            // Find matching rows
+            rows.forEach((row, index) => {
+                const cardCell = row.querySelector('.card-cell');
+                if (cardCell && cardCell.textContent.toLowerCase().includes(query)) {
+                    searchMatches.push(row);
+                }
+            });
+            
+            // Update count display
+            const countEl = document.getElementById('searchCount');
+            if (searchMatches.length > 0) {
+                countEl.textContent = `${searchMatches.length} found`;
+                // Auto-jump to first match
+                currentMatchIndex = 0;
+                highlightAndScroll();
+            } else {
+                countEl.textContent = 'No matches';
+            }
+        }
+        
+        function highlightAndScroll() {
+            // Clear all highlights
+            document.querySelectorAll('#statsBody tr').forEach(row => {
+                row.classList.remove('highlight-row');
+            });
+            
+            if (searchMatches.length === 0 || currentMatchIndex < 0) return;
+            
+            const row = searchMatches[currentMatchIndex];
+            row.classList.add('highlight-row');
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            
+            // Update count display
+            document.getElementById('searchCount').textContent = 
+                `${currentMatchIndex + 1} / ${searchMatches.length}`;
+        }
+        
+        function searchNext() {
+            if (searchMatches.length === 0) return;
+            currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
+            highlightAndScroll();
+        }
+        
+        function searchPrev() {
+            if (searchMatches.length === 0) return;
+            currentMatchIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+            highlightAndScroll();
         }
     </script>
 </body>
