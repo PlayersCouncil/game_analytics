@@ -157,6 +157,7 @@
             background: var(--bg-card);
             border-radius: 8px;
             overflow-x: auto;
+            min-height: 200px;
         }
         
         table {
@@ -470,22 +471,34 @@
         .filter-btn {
             background: none;
             border: none;
-            color: var(--text-dim);
             cursor: pointer;
             padding: 2px 4px;
-            font-size: 0.8em;
             opacity: 0.6;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s, filter 0.2s;
+            display: flex;
+            align-items: center;
+        }
+        
+        .filter-btn img {
+            width: 14px;
+            height: 14px;
+            filter: brightness(0) invert(0.6);
         }
         
         .filter-btn:hover {
             opacity: 1;
-            color: var(--accent);
+        }
+        
+        .filter-btn:hover img {
+            filter: brightness(0) invert(0.4) sepia(1) saturate(5) hue-rotate(314deg);
         }
         
         .filter-btn.active {
             opacity: 1;
-            color: var(--accent);
+        }
+        
+        .filter-btn.active img {
+            filter: brightness(0) invert(0.4) sepia(1) saturate(5) hue-rotate(314deg);
         }
         
         .filter-dropdown {
@@ -496,7 +509,7 @@
             background: var(--bg-card);
             border: 1px solid #444;
             border-radius: 6px;
-            min-width: 180px;
+            min-width: 190px;
             max-height: 300px;
             overflow-y: auto;
             z-index: 200;
@@ -802,7 +815,7 @@
                 this.headerEl.innerHTML = `
                     <div class="filter-header">
                         <span class="header-text">${originalContent}</span>
-                        <button class="filter-btn" title="Filter">☰</button>
+                        <button class="filter-btn" title="Filter"><img src="images/filter.svg" alt="Filter"></button>
                     </div>
                     <div class="filter-dropdown"></div>
                 `;
