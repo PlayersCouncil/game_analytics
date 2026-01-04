@@ -69,6 +69,77 @@ def build_stats_query(
     return sql, params
 
 
+def build_player_query(
+    format_name: str,
+    start_date: Optional[date],
+    end_date: Optional[date],
+    outcome_tiers: Optional[list[int]],
+    competitive_tiers: Optional[list[int]],
+    patch_date: Optional[date],
+) -> tuple[str, list]:
+    """
+    Build SQL query for unique player counts with filters.
+    
+    Returns (sql, params) tuple.
+    """
+    conditions = ["format_name = %s"]
+    params = [format_name]
+    
+    # Date range - patch_date overrides start_date
+    if patch_date:
+        conditions.append("stat_date >= %s")
+        params.append(patch_date)
+    elif start_date:
+        conditions.append("stat_date >= %s")
+        params.append(start_date)
+    
+    if end_date:
+        conditions.append("stat_date <= %s")
+        params.append(end_date)
+    
+    # Tier filters
+    if outcome_tiers:
+        placeholders = ','.join(['%s'] * len(outcome_tiers))
+        conditions.append(f"outcome_tier IN ({placeholders})")
+        params.extend(outcome_tiers)
+    
+    if competitive_tiers:
+        placeholders = ','.join(['%s'] * len(competitive_tiers))
+        conditions.append(f"competitive_tier IN ({placeholders})")
+        params.extend(competitive_tiers)
+    
+    where_clause = " AND ".join(conditions)
+    
+    sql = f"""
+        SELECT card_blueprint, COUNT(DISTINCT player_id) as unique_players
+        FROM card_stats_daily_players
+        WHERE {where_clause}
+        GROUP BY card_blueprint
+    """
+    
+    return sql, params
+
+
+def fetch_unique_players(
+    cursor,
+    format_name: str,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    outcome_tiers: Optional[list[int]] = None,
+    competitive_tiers: Optional[list[int]] = None,
+    patch_date: Optional[date] = None,
+) -> dict[str, int]:
+    """Returns {blueprint: unique_player_count} for the given filters."""
+    
+    sql, params = build_player_query(
+        format_name, start_date, end_date,
+        outcome_tiers, competitive_tiers, patch_date
+    )
+    
+    cursor.execute(sql, params)
+    return {row[0]: row[1] for row in cursor.fetchall()}
+
+
 def fetch_card_stats(
     cursor,
     format_name: str,
@@ -92,6 +163,12 @@ def fetch_card_stats(
     cursor.execute(sql, params)
     rows = cursor.fetchall()
     
+    # Fetch unique player counts
+    player_counts = fetch_unique_players(
+        cursor, format_name, start_date, end_date,
+        outcome_tiers, competitive_tiers, patch_date
+    )
+    
     # Process into CardStats objects
     results = []
     for row in rows:
@@ -113,6 +190,7 @@ def fetch_card_stats(
             games=games,
             copies=copies,
             inclusion_wr=round(inclusion_wr, 4),
+            unique_players=player_counts.get(blueprint, 0),
             played_games=played_games,
             played_wr=round(played_wr, 4) if played_wr is not None else None,
             priority=round(priority, 2),

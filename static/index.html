@@ -272,6 +272,10 @@
             background: var(--played-bar);
         }
         
+        .bar-cell .bar-fill.players {
+            background: var(--fp-color);
+        }
+        
         .loading {
             text-align: center;
             padding: 40px;
@@ -726,13 +730,14 @@
                     <th data-sort="culture">Culture</th>
                     <th data-sort="games">Games</th>
                     <th data-sort="inclusion_wr">Incl WR</th>
+                    <th data-sort="unique_players">Players</th>
                     <th data-sort="played_games">Played</th>
                     <th data-sort="played_wr">Play WR</th>
                     <th data-sort="priority" class="sorted">Priority</th>
                 </tr>
             </thead>
             <tbody id="statsBody">
-                <tr><td colspan="8" class="loading">Select filters and click Load Stats</td></tr>
+                <tr><td colspan="9" class="loading">Select filters and click Load Stats</td></tr>
             </tbody>
         </table>
     </div>
@@ -1115,7 +1120,7 @@
             btn.disabled = true;
             btn.textContent = 'Loading...';
             errorDiv.style.display = 'none';
-            tbody.innerHTML = '<tr><td colspan="8" class="loading">Loading...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
             
             queryStartTime = performance.now();
             
@@ -1188,7 +1193,7 @@
             } catch (err) {
                 errorDiv.textContent = err.message;
                 errorDiv.style.display = 'block';
-                tbody.innerHTML = '<tr><td colspan="8" class="loading">Error loading data</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="loading">Error loading data</td></tr>';
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Load Stats';
@@ -1257,6 +1262,18 @@
             `;
         }
         
+        function formatPlayers(uniquePlayers, maxPlayers) {
+            const pct = maxPlayers > 0 ? Math.min(uniquePlayers / maxPlayers * 100, 100) : 0;
+            return `
+                <div class="bar-cell">
+                    <span>${uniquePlayers.toLocaleString()}</span>
+                    <div class="bar">
+                        <div class="bar-fill players" style="width: ${pct}%"></div>
+                    </div>
+                </div>
+            `;
+        }
+        
         function formatCardName(card) {
             const name = card.cardName || card.blueprint;
             const bp = `<span class="blueprint">${card.blueprint}</span>`;
@@ -1294,12 +1311,13 @@
             const tbody = document.getElementById('statsBody');
             
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="loading">No data found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="loading">No data found</td></tr>';
                 return;
             }
             
             const maxPriority = Math.max(...data.map(d => Math.abs(d.priority)));
             const maxPlayed = Math.max(...data.map(d => d.played_games));
+            const maxPlayers = Math.max(...data.map(d => d.unique_players || 0));
             
             tbody.innerHTML = data.map(card => `
                 <tr>
@@ -1308,6 +1326,7 @@
                     <td class="culture">${formatCulture(card.culture, card.cardName)}</td>
                     <td>${card.games.toLocaleString()}</td>
                     <td>${formatWinRate(card.inclusion_wr)}</td>
+                    <td>${formatPlayers(card.unique_players || 0, maxPlayers)}</td>
                     <td>${formatPlayed(card.played_games, maxPlayed)}</td>
                     <td>${formatWinRate(card.played_wr)}</td>
                     <td>${formatPriority(card.priority, maxPriority)}</td>

@@ -112,6 +112,52 @@ def compute_daily_stats(cursor, target_date: date, dry_run: bool = False) -> int
     return len(rows)
 
 
+def compute_daily_player_stats(cursor, target_date: date, dry_run: bool = False) -> int:
+    """
+    Compute unique players per card for a specific date.
+    
+    Returns number of rows upserted.
+    """
+    logger.info(f"Computing player stats for {target_date}")
+    
+    # Get distinct player/card/tier combinations for the day
+    player_sql = """
+        SELECT DISTINCT
+            gdc.card_blueprint,
+            ga.format_name,
+            ga.game_date,
+            ga.outcome_tier,
+            ga.competitive_tier,
+            gdc.player_id
+        FROM game_deck_cards gdc
+        JOIN game_analysis ga ON gdc.game_id = ga.game_id
+        WHERE ga.game_date = %s
+    """
+    
+    cursor.execute(player_sql, (target_date,))
+    rows = cursor.fetchall()
+    
+    if dry_run:
+        logger.info(f"DRY RUN: Would upsert {len(rows)} player stat rows for {target_date}")
+        return len(rows)
+    
+    if not rows:
+        logger.info(f"No player stats found for {target_date}")
+        return 0
+    
+    # Upsert into card_stats_daily_players
+    upsert_sql = """
+        INSERT IGNORE INTO card_stats_daily_players (
+            card_blueprint, format_name, stat_date, outcome_tier, competitive_tier, player_id
+        ) VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    
+    cursor.executemany(upsert_sql, rows)
+    logger.info(f"Upserted {len(rows)} player stat rows for {target_date}")
+    
+    return len(rows)
+
+
 def get_all_game_dates(cursor) -> list:
     """Get all distinct game dates from game_analysis."""
     cursor.execute("SELECT DISTINCT game_date FROM game_analysis ORDER BY game_date")
@@ -122,11 +168,12 @@ def rebuild_all_stats(conn, cursor, dry_run: bool = False) -> int:
     """
     Full rebuild of all daily stats.
     
-    Clears card_stats_daily and recomputes from scratch.
+    Clears card_stats_daily and card_stats_daily_players, then recomputes from scratch.
     """
-    logger.info("Starting full rebuild of card_stats_daily")
+    logger.info("Starting full rebuild of card_stats_daily and card_stats_daily_players")
     
     if not dry_run:
+        cursor.execute("DELETE FROM card_stats_daily_players")
         cursor.execute("DELETE FROM card_stats_daily")
         logger.info("Cleared existing stats")
     
@@ -134,9 +181,12 @@ def rebuild_all_stats(conn, cursor, dry_run: bool = False) -> int:
     logger.info(f"Found {len(dates)} dates to process")
     
     total_rows = 0
+    total_player_rows = 0
     for i, target_date in enumerate(dates):
         rows = compute_daily_stats(cursor, target_date, dry_run)
+        player_rows = compute_daily_player_stats(cursor, target_date, dry_run)
         total_rows += rows
+        total_player_rows += player_rows
         
         # Commit periodically to avoid long transactions
         if not dry_run and (i + 1) % 30 == 0:
@@ -146,7 +196,7 @@ def rebuild_all_stats(conn, cursor, dry_run: bool = False) -> int:
     if not dry_run:
         conn.commit()
     
-    logger.info(f"Full rebuild complete. Total rows: {total_rows}")
+    logger.info(f"Full rebuild complete. Stat rows: {total_rows}, Player rows: {total_player_rows}")
     return total_rows
 
 
@@ -212,10 +262,11 @@ def main():
             
             try:
                 rows = compute_daily_stats(cursor, target_date, args.dry_run)
+                player_rows = compute_daily_player_stats(cursor, target_date, args.dry_run)
                 if not args.dry_run:
                     conn.commit()
                 if log_id:
-                    log_computation_end(cursor, log_id, rows, 'completed')
+                    log_computation_end(cursor, log_id, rows + player_rows, 'completed')
                     conn.commit()
             except Exception as e:
                 if log_id:

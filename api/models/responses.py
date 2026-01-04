@@ -18,6 +18,7 @@ class CardStats(BaseModel):
     games: int
     copies: int
     inclusion_wr: float
+    unique_players: int = 0  # Distinct players who included this card
     played_games: int
     played_wr: Optional[float] = None
     priority: float  # games * (wr - 0.5)
