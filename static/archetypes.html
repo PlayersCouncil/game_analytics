@@ -351,6 +351,49 @@
             object-fit: contain;
             border-radius: 12px;
         }
+        
+        .related-communities {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 8px;
+            padding: 10px;
+            font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        
+        .related-communities:empty {
+            display: none;
+        }
+        
+        .related-communities .title {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--accent);
+        }
+        
+        .related-community-item {
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .related-community-item:last-child {
+            border-bottom: none;
+        }
+        
+        .related-community-item .name {
+            color: var(--text-primary);
+        }
+        
+        .related-community-item .lift {
+            color: var(--text-secondary);
+            font-size: 11px;
+        }
     </style>
 </head>
 <body>
@@ -388,6 +431,7 @@
     
     <div id="cardPopup" class="card-popup">
         <img id="cardImage" src="" alt="Card">
+        <div id="relatedCommunities" class="related-communities"></div>
     </div>
     
     <script>
@@ -552,7 +596,7 @@
                 <div class="cards-grid">
                     ${community.members.map(card => `
                         <div class="card-item ${card.is_core ? 'core' : ''}"
-                             onmouseenter="showHover(event, '${card.image_url || ''}')"
+                             onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
                              onmousemove="moveHover(event)"
                              onmouseleave="hideHover()">
                             <img src="${card.image_url || '/static/images/card-back.png'}" 
@@ -624,14 +668,57 @@
         }
         
         // Hover image handling
-        function showHover(event, imageUrl) {
+        let hoverAbortController = null;
+        
+        async function showHover(event, imageUrl, blueprint) {
             if (!imageUrl) return;
             
             const img = document.getElementById('cardImage');
             const popup = document.getElementById('cardPopup');
+            const relatedEl = document.getElementById('relatedCommunities');
+            
             img.src = imageUrl;
+            relatedEl.innerHTML = '<div class="title">Loading...</div>';
             popup.style.display = 'block';
             moveHover(event);
+            
+            // Fetch related communities
+            if (blueprint && currentCommunityId) {
+                // Cancel any pending request
+                if (hoverAbortController) {
+                    hoverAbortController.abort();
+                }
+                hoverAbortController = new AbortController();
+                
+                try {
+                    const format = document.getElementById('formatSelect').value;
+                    const url = `/api/card-communities/${encodeURIComponent(blueprint)}?format_name=${encodeURIComponent(format)}&exclude_community_id=${currentCommunityId}&limit=5`;
+                    
+                    const resp = await fetch(url, { signal: hoverAbortController.signal });
+                    const data = await resp.json();
+                    
+                    if (data.communities && data.communities.length > 0) {
+                        relatedEl.innerHTML = `
+                            <div class="title">Also appears in:</div>
+                            ${data.communities.map(c => `
+                                <div class="related-community-item">
+                                    <span class="name">${c.archetype_name || `Community #${c.community_id}`}</span>
+                                    <span class="lift">lift ${c.avg_lift}</span>
+                                </div>
+                            `).join('')}
+                        `;
+                    } else {
+                        relatedEl.innerHTML = '';
+                    }
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.error('Failed to fetch related communities:', err);
+                    }
+                    relatedEl.innerHTML = '';
+                }
+            } else {
+                relatedEl.innerHTML = '';
+            }
         }
         
         function moveHover(event) {
@@ -655,6 +742,11 @@
         
         function hideHover() {
             document.getElementById('cardPopup').style.display = 'none';
+            document.getElementById('relatedCommunities').innerHTML = '';
+            if (hoverAbortController) {
+                hoverAbortController.abort();
+                hoverAbortController = null;
+            }
         }
         
         // Event listeners

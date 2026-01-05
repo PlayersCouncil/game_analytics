@@ -272,3 +272,85 @@ def list_formats_with_communities(
     """)
     
     return {"formats": [row[0] for row in cursor.fetchall()]}
+
+
+@router.get("/card-communities/{blueprint}")
+def get_card_community_associations(
+    blueprint: str,
+    format_name: str = Query(..., description="Format to query"),
+    exclude_community_id: Optional[int] = Query(None, description="Exclude this community (the one we're viewing)"),
+    limit: int = Query(5, description="Max communities to return"),
+    cursor = Depends(get_db_cursor),
+):
+    """
+    Get communities this card is associated with (via correlations with their members).
+    
+    Returns top N communities where this card correlates strongly with community members,
+    even if the card isn't officially in that community.
+    """
+    # Get the card's side first
+    cursor.execute("""
+        SELECT side FROM card_catalog WHERE blueprint = %s
+    """, (blueprint,))
+    row = cursor.fetchone()
+    if not row:
+        return {"blueprint": blueprint, "communities": []}
+    
+    card_side = row[0]
+    
+    # Find communities where this card has high average lift with members
+    # We calculate: for each community, average lift between this card and community members
+    query = """
+        SELECT 
+            cc.id,
+            cc.community_id,
+            cc.archetype_name,
+            cc.card_count,
+            COUNT(DISTINCT ccm.card_blueprint) as connected_cards,
+            AVG(corr.lift) as avg_lift,
+            MAX(corr.lift) as max_lift
+        FROM card_communities cc
+        JOIN card_community_members ccm ON cc.id = ccm.community_id
+        LEFT JOIN card_correlations corr ON (
+            corr.format_name = cc.format_name
+            AND corr.side = cc.side
+            AND (
+                (corr.card_a = %s AND corr.card_b = ccm.card_blueprint)
+                OR (corr.card_b = %s AND corr.card_a = ccm.card_blueprint)
+            )
+        )
+        WHERE cc.format_name = %s
+          AND cc.side = %s
+          AND cc.is_valid = TRUE
+          AND corr.lift IS NOT NULL
+    """
+    params = [blueprint, blueprint, format_name, card_side]
+    
+    if exclude_community_id:
+        query += " AND cc.id != %s"
+        params.append(exclude_community_id)
+    
+    query += """
+        GROUP BY cc.id, cc.community_id, cc.archetype_name, cc.card_count
+        HAVING connected_cards >= 3
+        ORDER BY avg_lift DESC
+        LIMIT %s
+    """
+    params.append(limit)
+    
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    
+    communities = []
+    for row in rows:
+        communities.append({
+            "id": row[0],
+            "community_id": row[1],
+            "archetype_name": row[2],
+            "card_count": row[3],
+            "connected_cards": row[4],
+            "avg_lift": round(row[5], 2) if row[5] else 0,
+            "max_lift": round(row[6], 2) if row[6] else 0,
+        })
+    
+    return {"blueprint": blueprint, "communities": communities}
