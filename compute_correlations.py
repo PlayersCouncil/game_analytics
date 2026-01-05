@@ -58,6 +58,7 @@ def get_card_sides(cursor) -> dict[str, str]:
 def get_deck_cards(cursor, format_name: str, card_sides: dict) -> tuple[dict, dict]:
     """
     Load all deck data for a format, separated by side.
+    Uses chunked processing to avoid OOM on large formats.
     
     Returns:
         fp_decks: {deck_id: set(blueprints)}
@@ -65,26 +66,51 @@ def get_deck_cards(cursor, format_name: str, card_sides: dict) -> tuple[dict, di
     
     deck_id is a tuple of (game_id, player_id)
     """
+    # First get the game_id range for this format
     cursor.execute("""
-        SELECT gdc.game_id, gdc.player_id, gdc.card_blueprint
-        FROM game_deck_cards gdc
-        JOIN game_analysis ga ON gdc.game_id = ga.game_id
-        WHERE ga.format_name = %s
-          AND gdc.card_role = 'draw_deck'
+        SELECT MIN(game_id), MAX(game_id), COUNT(*)
+        FROM game_analysis
+        WHERE format_name = %s
     """, (format_name,))
+    min_id, max_id, game_count = cursor.fetchone()
+    
+    if not min_id:
+        return {}, {}
+    
+    logger.info(f"  Format has {game_count:,} games (IDs {min_id} to {max_id})")
     
     fp_decks = defaultdict(set)
     shadow_decks = defaultdict(set)
     
-    for game_id, player_id, blueprint in cursor.fetchall():
-        deck_id = (game_id, player_id)
-        side = card_sides.get(blueprint)
+    # Process in chunks of 10000 games
+    chunk_size = 10000
+    current_min = min_id
+    
+    while current_min <= max_id:
+        current_max = current_min + chunk_size
         
-        if side == 'free_peoples':
-            fp_decks[deck_id].add(blueprint)
-        elif side == 'shadow':
-            shadow_decks[deck_id].add(blueprint)
-        # Skip cards with unknown side (sites, rings, etc.)
+        cursor.execute("""
+            SELECT gdc.game_id, gdc.player_id, gdc.card_blueprint
+            FROM game_deck_cards gdc
+            JOIN game_analysis ga ON gdc.game_id = ga.game_id
+            WHERE ga.format_name = %s
+              AND gdc.card_role = 'draw_deck'
+              AND ga.game_id >= %s
+              AND ga.game_id < %s
+        """, (format_name, current_min, current_max))
+        
+        rows = cursor.fetchall()
+        
+        for game_id, player_id, blueprint in rows:
+            deck_id = (game_id, player_id)
+            side = card_sides.get(blueprint)
+            
+            if side == 'free_peoples':
+                fp_decks[deck_id].add(blueprint)
+            elif side == 'shadow':
+                shadow_decks[deck_id].add(blueprint)
+        
+        current_min = current_max
     
     return dict(fp_decks), dict(shadow_decks)
 
@@ -283,35 +309,42 @@ def main():
         for format_name in formats:
             logger.info(f"\n=== Processing {format_name} ===")
             
-            # Load deck data
-            fp_decks, shadow_decks = get_deck_cards(cursor, format_name, card_sides)
-            logger.info(f"Loaded {len(fp_decks)} FP decks, {len(shadow_decks)} Shadow decks")
-            
-            # Process Free Peoples
-            if fp_decks:
-                logger.info("Computing Free Peoples correlations...")
-                fp_card_counts = compute_card_counts(fp_decks)
-                fp_correlations = compute_correlations(
-                    fp_card_counts, len(fp_decks),
-                    args.min_appearances, args.min_lift
-                )
-                insert_correlations(
-                    cursor, conn, format_name, 'free_peoples',
-                    fp_correlations, args.dry_run
-                )
-            
-            # Process Shadow
-            if shadow_decks:
-                logger.info("Computing Shadow correlations...")
-                shadow_card_counts = compute_card_counts(shadow_decks)
-                shadow_correlations = compute_correlations(
-                    shadow_card_counts, len(shadow_decks),
-                    args.min_appearances, args.min_lift
-                )
-                insert_correlations(
-                    cursor, conn, format_name, 'shadow',
-                    shadow_correlations, args.dry_run
-                )
+            try:
+                # Load deck data
+                fp_decks, shadow_decks = get_deck_cards(cursor, format_name, card_sides)
+                logger.info(f"Loaded {len(fp_decks)} FP decks, {len(shadow_decks)} Shadow decks")
+                
+                # Process Free Peoples
+                if fp_decks:
+                    logger.info("Computing Free Peoples correlations...")
+                    fp_card_counts = compute_card_counts(fp_decks)
+                    fp_correlations = compute_correlations(
+                        fp_card_counts, len(fp_decks),
+                        args.min_appearances, args.min_lift
+                    )
+                    insert_correlations(
+                        cursor, conn, format_name, 'free_peoples',
+                        fp_correlations, args.dry_run
+                    )
+                
+                # Process Shadow
+                if shadow_decks:
+                    logger.info("Computing Shadow correlations...")
+                    shadow_card_counts = compute_card_counts(shadow_decks)
+                    shadow_correlations = compute_correlations(
+                        shadow_card_counts, len(shadow_decks),
+                        args.min_appearances, args.min_lift
+                    )
+                    insert_correlations(
+                        cursor, conn, format_name, 'shadow',
+                        shadow_correlations, args.dry_run
+                    )
+                    
+            except Exception as e:
+                logger.error(f"Error processing {format_name}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                continue
         
         logger.info("\nCorrelation computation complete!")
     
