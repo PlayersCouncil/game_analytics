@@ -80,14 +80,14 @@ def get_card_stats(
     total_games_params = [format]
     
     if patch_date:
-        total_games_sql += " AND DATE(ga.analyzed_at) >= %s"
+        total_games_sql += " AND DATE(ga.processed_at) >= %s"
         total_games_params.append(patch_date)
     elif start:
-        total_games_sql += " AND DATE(ga.analyzed_at) >= %s"
+        total_games_sql += " AND DATE(ga.processed_at) >= %s"
         total_games_params.append(start)
     
     if end:
-        total_games_sql += " AND DATE(ga.analyzed_at) <= %s"
+        total_games_sql += " AND DATE(ga.processed_at) <= %s"
         total_games_params.append(end)
     
     if outcome_tiers:
