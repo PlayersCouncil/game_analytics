@@ -628,8 +628,9 @@
             if (!imageUrl) return;
             
             const img = document.getElementById('cardImage');
+            const popup = document.getElementById('cardPopup');
             img.src = imageUrl;
-            img.style.display = 'block';
+            popup.style.display = 'block';
             moveHover(event);
         }
         
