@@ -326,6 +326,7 @@ def main():
                         cursor, conn, format_name, 'free_peoples',
                         fp_correlations, args.dry_run
                     )
+                    del fp_card_counts, fp_correlations
                 
                 # Process Shadow
                 if shadow_decks:
@@ -339,6 +340,13 @@ def main():
                         cursor, conn, format_name, 'shadow',
                         shadow_correlations, args.dry_run
                     )
+                    del shadow_card_counts, shadow_correlations
+                
+                # Free memory before next format
+                del fp_decks, shadow_decks
+                import gc
+                gc.collect()
+                logger.info(f"  Memory released for {format_name}")
                     
             except Exception as e:
                 logger.error(f"Error processing {format_name}: {e}")
