@@ -193,11 +193,11 @@ def insert_communities(
         
         # Get card names for preview
         all_cards = []
-        for comm in community_stats[:5]:  # Preview top 5
+        for comm in community_stats[:15]:  # Preview top 15
             all_cards.extend(comm['cards'])
         card_names = get_card_names(cursor, all_cards)
         
-        for comm in community_stats[:5]:
+        for comm in community_stats[:15]:
             logger.info(f"\n  Community {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}")
             # Show top 10 cards by membership score
             top_cards = sorted(comm['membership_scores'].items(), key=lambda x: x[1], reverse=True)[:10]

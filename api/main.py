@@ -113,13 +113,14 @@ def health_check():
 
 
 # Import and register routers
-from .routes import cards_router, patches_router, admin_router, catalog_router, correlations_router
+from .routes import cards_router, patches_router, admin_router, catalog_router, correlations_router, archetypes_router
 
 app.include_router(cards_router, prefix="/api")
 app.include_router(patches_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(catalog_router, prefix="/api")
 app.include_router(correlations_router, prefix="/api")
+app.include_router(archetypes_router, prefix="/api")
 
 
 # Static files - serve dashboard

@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GEMP Archetype Explorer</title>
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --text-primary: #eee;
+            --text-secondary: #aaa;
+            --accent: #e94560;
+            --fp-color: #4a90d9;
+            --shadow-color: #9b59b6;
+            --success: #27ae60;
+            --warning: #f39c12;
+        }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        h1 {
+            margin: 0 0 20px 0;
+            color: var(--accent);
+        }
+        
+        h2 {
+            margin: 0 0 15px 0;
+            color: var(--text-primary);
+            font-size: 1.2em;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        select, input, button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--bg-tertiary);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+        
+        button {
+            background: var(--accent);
+            border-color: var(--accent);
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        
+        button:hover {
+            opacity: 0.8;
+        }
+        
+        button.secondary {
+            background: var(--bg-tertiary);
+            border-color: var(--bg-tertiary);
+        }
+        
+        button.success {
+            background: var(--success);
+            border-color: var(--success);
+        }
+        
+        button.warning {
+            background: var(--warning);
+            border-color: var(--warning);
+            color: #000;
+        }
+        
+        .main-layout {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            height: calc(100vh - 140px);
+        }
+        
+        .community-list {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .community-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 4px solid transparent;
+        }
+        
+        .community-item:hover {
+            background: var(--bg-primary);
+        }
+        
+        .community-item.selected {
+            border-left-color: var(--accent);
+            background: var(--bg-primary);
+        }
+        
+        .community-item.invalid {
+            opacity: 0.5;
+        }
+        
+        .community-item.free_peoples {
+            border-left-color: var(--fp-color);
+        }
+        
+        .community-item.shadow {
+            border-left-color: var(--shadow-color);
+        }
+        
+        .community-item .name {
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .community-item .meta {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .community-item .side-badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+        
+        .community-item .side-badge.free_peoples {
+            background: var(--fp-color);
+        }
+        
+        .community-item .side-badge.shadow {
+            background: var(--shadow-color);
+        }
+        
+        .community-detail {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .detail-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--bg-tertiary);
+        }
+        
+        .detail-header h2 {
+            margin: 0;
+        }
+        
+        .detail-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .name-input {
+            width: 250px;
+        }
+        
+        .stats-row {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        
+        .card-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            position: relative;
+        }
+        
+        .card-item.core {
+            border: 1px solid var(--success);
+        }
+        
+        .card-item img {
+            width: 40px;
+            height: 56px;
+            object-fit: cover;
+            border-radius: 3px;
+            background: var(--bg-primary);
+        }
+        
+        .card-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .card-name {
+            font-weight: 500;
+            font-size: 13px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .card-meta {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
+        
+        .score-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: var(--accent);
+            border-radius: 0 0 6px 6px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        
+        .notes-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid var(--bg-tertiary);
+        }
+        
+        .notes-section textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid var(--bg-tertiary);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-family: inherit;
+            resize: vertical;
+        }
+        
+        .culture-breakdown {
+            margin-bottom: 20px;
+        }
+        
+        .culture-bar {
+            display: flex;
+            height: 24px;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .culture-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 500;
+            color: white;
+            padding: 0 8px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        
+        /* Culture colors */
+        .culture-elven { background: #3498db; }
+        .culture-gandalf { background: #9b59b6; }
+        .culture-gondor { background: #27ae60; }
+        .culture-dwarven { background: #e67e22; }
+        .culture-shire { background: #f1c40f; color: #000; }
+        .culture-rohan { background: #1abc9c; }
+        .culture-isengard { background: #e74c3c; }
+        .culture-sauron { background: #c0392b; }
+        .culture-moria { background: #7f8c8d; }
+        .culture-wraith { background: #2c3e50; }
+        .culture-dunland { background: #8e44ad; }
+        .culture-raider { background: #d35400; }
+        .culture-gollum { background: #95a5a6; }
+        .culture-unknown { background: #34495e; }
+        
+        .hover-image {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+            max-width: 250px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+    <h1>🎴 Archetype Explorer</h1>
+    
+    <div class="controls">
+        <select id="formatSelect">
+            <option value="">Loading formats...</option>
+        </select>
+        
+        <select id="sideFilter">
+            <option value="">All Sides</option>
+            <option value="free_peoples">Free Peoples</option>
+            <option value="shadow">Shadow</option>
+        </select>
+        
+        <label>
+            <input type="checkbox" id="showInvalid"> Show Invalid
+        </label>
+        
+        <button onclick="loadCommunities()" class="secondary">Refresh</button>
+        
+        <a href="/" style="color: var(--text-secondary); margin-left: auto;">← Back to Card Stats</a>
+    </div>
+    
+    <div class="main-layout">
+        <div class="community-list" id="communityList">
+            <div class="empty-state">Select a format to view communities</div>
+        </div>
+        
+        <div class="community-detail" id="communityDetail">
+            <div class="empty-state">Select a community to view details</div>
+        </div>
+    </div>
+    
+    <img id="hoverImage" class="hover-image">
+    
+    <script>
+        let currentCommunityId = null;
+        let communities = [];
+        
+        // Load available formats on page load
+        async function loadFormats() {
+            try {
+                const resp = await fetch('/api/formats-with-communities');
+                const data = await resp.json();
+                
+                const select = document.getElementById('formatSelect');
+                select.innerHTML = '<option value="">Select format...</option>';
+                
+                for (const format of data.formats) {
+                    const opt = document.createElement('option');
+                    opt.value = format;
+                    opt.textContent = format;
+                    select.appendChild(opt);
+                }
+            } catch (err) {
+                console.error('Failed to load formats:', err);
+            }
+        }
+        
+        // Load communities for selected format
+        async function loadCommunities() {
+            const format = document.getElementById('formatSelect').value;
+            if (!format) return;
+            
+            const side = document.getElementById('sideFilter').value;
+            const showInvalid = document.getElementById('showInvalid').checked;
+            
+            const listEl = document.getElementById('communityList');
+            listEl.innerHTML = '<div class="loading">Loading...</div>';
+            
+            try {
+                let url = `/api/communities?format_name=${encodeURIComponent(format)}`;
+                if (side) url += `&side=${side}`;
+                if (showInvalid) url += `&include_invalid=true`;
+                
+                const resp = await fetch(url);
+                const data = await resp.json();
+                communities = data.communities;
+                
+                renderCommunityList();
+            } catch (err) {
+                console.error('Failed to load communities:', err);
+                listEl.innerHTML = '<div class="empty-state">Error loading communities</div>';
+            }
+        }
+        
+        function renderCommunityList() {
+            const listEl = document.getElementById('communityList');
+            
+            if (communities.length === 0) {
+                listEl.innerHTML = '<div class="empty-state">No communities found</div>';
+                return;
+            }
+            
+            listEl.innerHTML = communities.map(c => `
+                <div class="community-item ${c.side} ${c.is_valid ? '' : 'invalid'} ${c.id === currentCommunityId ? 'selected' : ''}"
+                     onclick="selectCommunity(${c.id})">
+                    <div class="name">
+                        ${c.archetype_name || `Community #${c.community_id}`}
+                        <span class="side-badge ${c.side}">${c.side === 'free_peoples' ? 'FP' : 'Shadow'}</span>
+                    </div>
+                    <div class="meta">
+                        ${c.card_count} cards · lift ${c.avg_internal_lift?.toFixed(1) || '?'}
+                        ${!c.is_valid ? ' · ❌ Invalid' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Load and display community detail
+        async function selectCommunity(id) {
+            currentCommunityId = id;
+            renderCommunityList(); // Update selection highlight
+            
+            const detailEl = document.getElementById('communityDetail');
+            detailEl.innerHTML = '<div class="loading">Loading...</div>';
+            
+            try {
+                const resp = await fetch(`/api/communities/${id}`);
+                const data = await resp.json();
+                
+                renderCommunityDetail(data);
+            } catch (err) {
+                console.error('Failed to load community:', err);
+                detailEl.innerHTML = '<div class="empty-state">Error loading community</div>';
+            }
+        }
+        
+        function renderCommunityDetail(community) {
+            const detailEl = document.getElementById('communityDetail');
+            
+            // Calculate culture breakdown
+            const cultureCounts = {};
+            for (const card of community.members) {
+                const culture = card.culture || 'unknown';
+                cultureCounts[culture] = (cultureCounts[culture] || 0) + 1;
+            }
+            
+            const cultureBar = Object.entries(cultureCounts)
+                .sort((a, b) => b[1] - a[1])
+                .map(([culture, count]) => {
+                    const pct = (count / community.members.length * 100).toFixed(1);
+                    return `<div class="culture-segment culture-${culture.toLowerCase()}" 
+                                style="width: ${pct}%" 
+                                title="${culture}: ${count} cards (${pct}%)">
+                        ${pct > 10 ? culture : ''}
+                    </div>`;
+                })
+                .join('');
+            
+            // Core vs flex counts
+            const coreCount = community.members.filter(m => m.is_core).length;
+            
+            detailEl.innerHTML = `
+                <div class="detail-header">
+                    <div>
+                        <h2>${community.archetype_name || `Community #${community.community_id}`}</h2>
+                        <div style="color: var(--text-secondary); font-size: 13px;">
+                            ${community.side === 'free_peoples' ? 'Free Peoples' : 'Shadow'} · ${community.format_name}
+                        </div>
+                    </div>
+                    <div class="detail-actions">
+                        <input type="text" class="name-input" id="archetypeName" 
+                               placeholder="Archetype name..." 
+                               value="${community.archetype_name || ''}">
+                        <button onclick="saveName(${community.id})" class="success">Save Name</button>
+                        <button onclick="toggleValid(${community.id}, ${!community.is_valid})" 
+                                class="${community.is_valid ? 'warning' : 'success'}">
+                            ${community.is_valid ? 'Mark Invalid' : 'Mark Valid'}
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="stats-row">
+                    <div class="stat">
+                        <div class="stat-value">${community.card_count}</div>
+                        <div class="stat-label">Total Cards</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${coreCount}</div>
+                        <div class="stat-label">Core Cards</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value">${community.avg_internal_lift?.toFixed(1) || '?'}</div>
+                        <div class="stat-label">Avg Lift</div>
+                    </div>
+                </div>
+                
+                <div class="culture-breakdown">
+                    <strong>Culture Distribution</strong>
+                    <div class="culture-bar">${cultureBar}</div>
+                </div>
+                
+                <h3>Cards (sorted by centrality)</h3>
+                <div class="cards-grid">
+                    ${community.members.map(card => `
+                        <div class="card-item ${card.is_core ? 'core' : ''}"
+                             onmouseenter="showHover(event, '${card.image_url || ''}')"
+                             onmousemove="moveHover(event)"
+                             onmouseleave="hideHover()">
+                            <img src="${card.image_url || '/static/images/card-back.png'}" 
+                                 alt="${card.name || card.blueprint}"
+                                 onerror="this.src='/static/images/card-back.png'">
+                            <div class="card-info">
+                                <div class="card-name" title="${card.name || card.blueprint}">
+                                    ${card.name || card.blueprint}
+                                </div>
+                                <div class="card-meta">
+                                    ${card.culture || ''} ${card.card_type || ''}
+                                    ${card.is_core ? '⭐' : ''}
+                                </div>
+                            </div>
+                            <div class="score-bar" style="width: ${card.membership_score * 100}%"></div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="notes-section">
+                    <strong>Notes</strong>
+                    <textarea id="communityNotes" placeholder="Add notes about this archetype...">${community.notes || ''}</textarea>
+                    <button onclick="saveNotes(${community.id})" class="secondary" style="margin-top: 10px;">Save Notes</button>
+                </div>
+            `;
+        }
+        
+        async function saveName(id) {
+            const name = document.getElementById('archetypeName').value.trim();
+            try {
+                await fetch(`/api/communities/${id}?archetype_name=${encodeURIComponent(name)}`, {
+                    method: 'PUT'
+                });
+                // Update local cache
+                const comm = communities.find(c => c.id === id);
+                if (comm) comm.archetype_name = name;
+                renderCommunityList();
+            } catch (err) {
+                console.error('Failed to save name:', err);
+                alert('Failed to save');
+            }
+        }
+        
+        async function saveNotes(id) {
+            const notes = document.getElementById('communityNotes').value;
+            try {
+                await fetch(`/api/communities/${id}?notes=${encodeURIComponent(notes)}`, {
+                    method: 'PUT'
+                });
+                alert('Notes saved');
+            } catch (err) {
+                console.error('Failed to save notes:', err);
+                alert('Failed to save');
+            }
+        }
+        
+        async function toggleValid(id, newValid) {
+            try {
+                await fetch(`/api/communities/${id}?is_valid=${newValid}`, {
+                    method: 'PUT'
+                });
+                // Refresh
+                loadCommunities();
+                selectCommunity(id);
+            } catch (err) {
+                console.error('Failed to toggle validity:', err);
+                alert('Failed to update');
+            }
+        }
+        
+        // Hover image handling
+        function showHover(event, imageUrl) {
+            if (!imageUrl) return;
+            const img = document.getElementById('hoverImage');
+            img.src = imageUrl;
+            img.style.display = 'block';
+            moveHover(event);
+        }
+        
+        function moveHover(event) {
+            const img = document.getElementById('hoverImage');
+            const offset = 20;
+            let x = event.clientX + offset;
+            let y = event.clientY + offset;
+            
+            // Keep on screen
+            if (x + 260 > window.innerWidth) {
+                x = event.clientX - 260 - offset;
+            }
+            if (y + 350 > window.innerHeight) {
+                y = window.innerHeight - 360;
+            }
+            
+            img.style.left = x + 'px';
+            img.style.top = y + 'px';
+        }
+        
+        function hideHover() {
+            document.getElementById('hoverImage').style.display = 'none';
+        }
+        
+        // Event listeners
+        document.getElementById('formatSelect').addEventListener('change', loadCommunities);
+        document.getElementById('sideFilter').addEventListener('change', loadCommunities);
+        document.getElementById('showInvalid').addEventListener('change', loadCommunities);
+        
+        // Init
+        loadFormats();
+    </script>
+</body>
+</html>
