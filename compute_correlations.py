@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import gc
 import logging
 import sys
 from collections import defaultdict
@@ -55,16 +56,15 @@ def get_card_sides(cursor) -> dict[str, str]:
     return sides
 
 
-def get_deck_cards(cursor, format_name: str, card_sides: dict) -> tuple[dict, dict]:
+def get_deck_cards_for_side(cursor, format_name: str, card_sides: dict, target_side: str) -> dict:
     """
-    Load all deck data for a format, separated by side.
+    Load deck data for a format, filtered to one side.
     Uses chunked processing to avoid OOM on large formats.
     
     Returns:
-        fp_decks: {deck_id: set(blueprints)}
-        shadow_decks: {deck_id: set(blueprints)}
+        decks: {deck_id: set(blueprints)}
     
-    deck_id is a tuple of (game_id, player_id)
+    deck_id is an integer for memory efficiency
     """
     # First get the game_id range for this format
     cursor.execute("""
@@ -75,12 +75,15 @@ def get_deck_cards(cursor, format_name: str, card_sides: dict) -> tuple[dict, di
     min_id, max_id, game_count = cursor.fetchone()
     
     if not min_id:
-        return {}, {}
+        return {}
     
     logger.info(f"  Format has {game_count:,} games (IDs {min_id} to {max_id})")
     
-    fp_decks = defaultdict(set)
-    shadow_decks = defaultdict(set)
+    decks = defaultdict(set)
+    
+    # Map (game_id, player_id) -> integer for memory efficiency
+    deck_id_map = {}
+    next_deck_id = 0
     
     # Process in chunks of 10000 games
     chunk_size = 10000
@@ -102,17 +105,23 @@ def get_deck_cards(cursor, format_name: str, card_sides: dict) -> tuple[dict, di
         rows = cursor.fetchall()
         
         for game_id, player_id, blueprint in rows:
-            deck_id = (game_id, player_id)
             side = card_sides.get(blueprint)
+            if side != target_side:
+                continue
+                
+            key = (game_id, player_id)
+            if key not in deck_id_map:
+                deck_id_map[key] = next_deck_id
+                next_deck_id += 1
+            deck_id = deck_id_map[key]
             
-            if side == 'free_peoples':
-                fp_decks[deck_id].add(blueprint)
-            elif side == 'shadow':
-                shadow_decks[deck_id].add(blueprint)
+            decks[deck_id].add(blueprint)
         
         current_min = current_max
     
-    return dict(fp_decks), dict(shadow_decks)
+    del deck_id_map  # Free the mapping, no longer needed
+    
+    return dict(decks)
 
 
 def compute_card_counts(decks: dict) -> dict[str, set]:
@@ -135,11 +144,11 @@ def compute_correlations(
     total_decks: int,
     min_appearances: int,
     min_lift: float,
-) -> list[tuple]:
+):
     """
     Compute pairwise correlations for all card pairs.
     
-    Returns list of tuples:
+    Yields batches of tuples:
         (card_a, card_b, together, a_count, b_count, total, jaccard, lift)
     """
     # Filter to cards meeting minimum appearance threshold
@@ -152,15 +161,18 @@ def compute_correlations(
     logger.info(f"  {len(filtered_cards)} cards meet min_appearances={min_appearances}")
     
     if len(filtered_cards) < 2:
-        return []
+        return
     
-    correlations = []
     cards = sorted(filtered_cards.keys())
     total_pairs = len(cards) * (len(cards) - 1) // 2
     
     logger.info(f"  Computing {total_pairs:,} card pairs...")
     
+    batch = []
+    batch_size = 10000
     processed = 0
+    found = 0
+    
     for i, card_a in enumerate(cards):
         decks_a = filtered_cards[card_a]
         a_count = len(decks_a)
@@ -173,6 +185,7 @@ def compute_correlations(
             together = len(decks_a & decks_b)
             
             if together == 0:
+                processed += 1
                 continue
             
             # Jaccard: intersection / union
@@ -180,24 +193,30 @@ def compute_correlations(
             jaccard = together / union if union > 0 else 0
             
             # Lift: P(A∩B) / (P(A) × P(B))
-            # = (together/total) / ((a_count/total) × (b_count/total))
-            # = (together × total) / (a_count × b_count)
             expected = (a_count * b_count) / total_decks
             lift = together / expected if expected > 0 else 0
             
             # Filter by minimum lift
             if lift >= min_lift:
-                correlations.append((
+                batch.append((
                     card_a, card_b, together, a_count, b_count,
                     total_decks, round(jaccard, 4), round(lift, 4)
                 ))
+                found += 1
+                
+                if len(batch) >= batch_size:
+                    yield batch
+                    batch = []
             
             processed += 1
             if processed % 500000 == 0:
-                logger.info(f"    Processed {processed:,}/{total_pairs:,} pairs...")
+                logger.info(f"    Processed {processed:,}/{total_pairs:,} pairs, found {found:,}...")
     
-    logger.info(f"  Found {len(correlations):,} correlations with lift >= {min_lift}")
-    return correlations
+    # Yield remaining
+    if batch:
+        yield batch
+    
+    logger.info(f"  Found {found:,} correlations with lift >= {min_lift}")
 
 
 def insert_correlations(
@@ -205,28 +224,19 @@ def insert_correlations(
     conn,
     format_name: str, 
     side: str, 
-    correlations: list,
+    correlation_batches,
     dry_run: bool = False
 ):
-    """Insert correlation data into database."""
-    if not correlations:
-        return
-    
-    if dry_run:
-        logger.info(f"  DRY RUN: Would insert {len(correlations):,} correlations")
-        # Show top 10 by lift
-        sorted_corr = sorted(correlations, key=lambda x: x[7], reverse=True)[:10]
-        for c in sorted_corr:
-            logger.info(f"    {c[0]} + {c[1]}: lift={c[7]:.2f}, together={c[2]}")
-        return
+    """Insert correlation data into database from batch generator."""
     
     # Clear existing correlations for this format/side
-    cursor.execute("""
-        DELETE FROM card_correlations 
-        WHERE format_name = %s AND side = %s
-    """, (format_name, side))
+    if not dry_run:
+        cursor.execute("""
+            DELETE FROM card_correlations 
+            WHERE format_name = %s AND side = %s
+        """, (format_name, side))
+        conn.commit()
     
-    # Insert new correlations
     insert_sql = """
         INSERT INTO card_correlations (
             card_a, card_b, format_name, side,
@@ -235,22 +245,36 @@ def insert_correlations(
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
     """
     
-    # Batch insert
-    batch_size = 10000
-    for i in range(0, len(correlations), batch_size):
-        batch = correlations[i:i+batch_size]
+    total_inserted = 0
+    
+    for batch in correlation_batches:
+        if not batch:
+            continue
+            
+        if dry_run:
+            if total_inserted == 0:
+                # Show top by lift from first batch
+                sorted_corr = sorted(batch, key=lambda x: x[7], reverse=True)[:10]
+                logger.info(f"  DRY RUN: Top correlations preview:")
+                for c in sorted_corr:
+                    logger.info(f"    {c[0]} + {c[1]}: lift={c[7]:.2f}, together={c[2]}")
+            total_inserted += len(batch)
+            continue
+        
         data = [
             (c[0], c[1], format_name, side, c[2], c[3], c[4], c[5], c[6], c[7])
             for c in batch
         ]
         cursor.executemany(insert_sql, data)
+        conn.commit()
         
-        if i + batch_size < len(correlations):
-            conn.commit()
-            logger.info(f"    Inserted {i + batch_size:,}/{len(correlations):,} rows...")
+        total_inserted += len(batch)
+        logger.info(f"    Inserted batch, total: {total_inserted:,} rows...")
     
-    conn.commit()
-    logger.info(f"  Inserted {len(correlations):,} correlations for {format_name} {side}")
+    if dry_run:
+        logger.info(f"  DRY RUN: Would insert {total_inserted:,} correlations")
+    else:
+        logger.info(f"  Inserted {total_inserted:,} correlations for {format_name} {side}")
 
 
 def get_available_formats(cursor) -> list[str]:
@@ -310,43 +334,59 @@ def main():
             logger.info(f"\n=== Processing {format_name} ===")
             
             try:
-                # Load deck data
-                fp_decks, shadow_decks = get_deck_cards(cursor, format_name, card_sides)
-                logger.info(f"Loaded {len(fp_decks)} FP decks, {len(shadow_decks)} Shadow decks")
+                # Process Free Peoples (load, compute, insert, free)
+                logger.info("Loading Free Peoples decks...")
+                fp_decks = get_deck_cards_for_side(cursor, format_name, card_sides, 'free_peoples')
+                fp_deck_count = len(fp_decks)
+                logger.info(f"  Loaded {fp_deck_count} FP decks")
                 
-                # Process Free Peoples
                 if fp_decks:
                     logger.info("Computing Free Peoples correlations...")
                     fp_card_counts = compute_card_counts(fp_decks)
-                    fp_correlations = compute_correlations(
-                        fp_card_counts, len(fp_decks),
-                        args.min_appearances, args.min_lift
-                    )
+                    del fp_decks  # Free deck data before computing correlations
+
+                    gc.collect()
+                    
                     insert_correlations(
                         cursor, conn, format_name, 'free_peoples',
-                        fp_correlations, args.dry_run
+                        compute_correlations(
+                            fp_card_counts, fp_deck_count,
+                            args.min_appearances, args.min_lift
+                        ),
+                        args.dry_run
                     )
-                    del fp_card_counts, fp_correlations
+                    del fp_card_counts
+                    gc.collect()
+                else:
+                    del fp_decks
                 
-                # Process Shadow
+                # Process Shadow (load, compute, insert, free)
+                logger.info("Loading Shadow decks...")
+                shadow_decks = get_deck_cards_for_side(cursor, format_name, card_sides, 'shadow')
+                shadow_deck_count = len(shadow_decks)
+                logger.info(f"  Loaded {shadow_deck_count} Shadow decks")
+                
                 if shadow_decks:
                     logger.info("Computing Shadow correlations...")
                     shadow_card_counts = compute_card_counts(shadow_decks)
-                    shadow_correlations = compute_correlations(
-                        shadow_card_counts, len(shadow_decks),
-                        args.min_appearances, args.min_lift
-                    )
+                    del shadow_decks  # Free deck data before computing correlations
+
+                    gc.collect()
+                    
                     insert_correlations(
                         cursor, conn, format_name, 'shadow',
-                        shadow_correlations, args.dry_run
+                        compute_correlations(
+                            shadow_card_counts, shadow_deck_count,
+                            args.min_appearances, args.min_lift
+                        ),
+                        args.dry_run
                     )
-                    del shadow_card_counts, shadow_correlations
+                    del shadow_card_counts
+                    gc.collect()
+                else:
+                    del shadow_decks
                 
-                # Free memory before next format
-                del fp_decks, shadow_decks
-                import gc
-                gc.collect()
-                logger.info(f"  Memory released for {format_name}")
+                logger.info(f"  Completed {format_name}")
                     
             except Exception as e:
                 logger.error(f"Error processing {format_name}: {e}")
