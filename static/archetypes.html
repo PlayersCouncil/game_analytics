@@ -335,14 +335,21 @@
         .culture-gollum { background: #95a5a6; }
         .culture-unknown { background: #34495e; }
         
-        .hover-image {
+        /* Card image popup */
+        .card-popup {
             display: none;
             position: fixed;
             z-index: 1000;
             pointer-events: none;
             width: 600px;
             height: 600px;
-            border-radius: 8px;
+        }
+
+        .card-popup img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border-radius: 12px;
         }
     </style>
 </head>
@@ -379,7 +386,9 @@
         </div>
     </div>
     
-    <img id="hoverImage" class="hover-image">
+    <div id="cardPopup" class="card-popup">
+        <img id="cardImage" src="" alt="Card">
+    </div>
     
     <script>
         let currentCommunityId = null;
@@ -617,32 +626,34 @@
         // Hover image handling
         function showHover(event, imageUrl) {
             if (!imageUrl) return;
-            const img = document.getElementById('hoverImage');
+            
+            const img = document.getElementById('cardImage');
             img.src = imageUrl;
             img.style.display = 'block';
             moveHover(event);
         }
         
         function moveHover(event) {
-            const img = document.getElementById('hoverImage');
-            const offset = 20;
+            const popup = document.getElementById('cardPopup');
+            const offset = 15;
+            const size = 600;
             let x = event.clientX + offset;
             let y = event.clientY + offset;
             
             // Keep on screen
-            if (x + 260 > window.innerWidth) {
-                x = event.clientX - 260 - offset;
+            if (x + size > window.innerWidth) {
+                x = event.clientX - size - offset;
             }
-            if (y + 350 > window.innerHeight) {
-                y = window.innerHeight - 360;
+            if (y + size > window.innerHeight) {
+                y = window.innerHeight - size;
             }
             
-            img.style.left = x + 'px';
-            img.style.top = y + 'px';
+            popup.style.left = x + 'px';
+            popup.style.top = y + 'px';
         }
         
         function hideHover() {
-            document.getElementById('hoverImage').style.display = 'none';
+            document.getElementById('cardPopup').style.display = 'none';
         }
         
         // Event listeners
