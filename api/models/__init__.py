@@ -10,4 +10,6 @@ from .responses import (
     PatchListResponse,
     ComputationStatus,
     AdminStatusResponse,
+    CardCorrelation,
+    CorrelationResponse,
 )

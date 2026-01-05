@@ -81,3 +81,20 @@ class AdminStatusResponse(BaseModel):
     total_games_analyzed: int
     total_card_stat_rows: int
     latest_game_date: Optional[date] = None
+
+
+class CardCorrelation(BaseModel):
+    blueprint: str
+    together_count: int           # Times appearing together
+    target_count: int             # Times target card appears
+    correlated_count: int         # Times correlated card appears
+    total_decks: int              # Total decks in format/side
+    jaccard: float                # Intersection / Union
+    lift: float                   # Key metric: how much more than chance
+    side: str
+
+
+class CorrelationResponse(BaseModel):
+    target_blueprint: Optional[str] = None
+    format_name: str
+    correlations: list[CardCorrelation]
