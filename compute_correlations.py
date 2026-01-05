@@ -160,7 +160,7 @@ def compute_correlations(
     
     logger.info(f"  {len(filtered_cards)} cards meet min_appearances={min_appearances}")
     
-    if len(filtered_cards) < 7:
+    if len(filtered_cards) < 2:
         return
     
     cards = sorted(filtered_cards.keys())

@@ -128,7 +128,7 @@ def compute_community_stats(
     
     for comm_id, cards in community_cards.items():
         # Skip tiny communities (likely noise)
-        if len(cards) < 3:
+        if len(cards) < 7:
             continue
         
         # Compute average internal lift
