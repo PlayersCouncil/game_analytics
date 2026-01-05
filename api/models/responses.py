@@ -30,6 +30,7 @@ class CardStatsResponse(BaseModel):
     outcome_tiers: Optional[list[int]] = None
     competitive_tiers: Optional[list[int]] = None
     total_cards: int
+    total_games: int = 0
     cards: list[CardStats]
 
 

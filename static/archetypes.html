@@ -394,6 +394,17 @@
             color: var(--text-secondary);
             font-size: 11px;
         }
+        
+        .header-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin-left: 15px;
+            font-size: 14px;
+        }
+        
+        .header-links a:hover {
+            color: var(--accent);
+        }
     </style>
 </head>
 <body>
@@ -416,7 +427,12 @@
         
         <button onclick="loadCommunities()" class="secondary">Refresh</button>
         
-        <a href="/" style="color: var(--text-secondary); margin-left: auto;">← Back to Card Stats</a>
+        <nav class="header-links" style="margin-left: auto;">
+            <a href="/">Home</a>
+            <a href="/query.html">Query Tool</a>
+            <a href="/admin.html">Admin</a>
+            <a href="/docs">API Docs</a>
+        </nav>
     </div>
     
     <div class="main-layout">

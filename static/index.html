@@ -14,10 +14,7 @@
             --text-dim: #999;
             --positive: #4ade80;
             --negative: #f87171;
-            --neutral: #fbbf24;
-            --played-bar: #d4a574;
-            --fp-color: #6b9bd1;
-            --shadow-color: #c97878;
+            --warning: #fbbf24;
         }
         
         * {
@@ -30,1465 +27,304 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: var(--bg-dark);
             color: var(--text);
-            height: 100vh;
+            min-height: 100vh;
             padding: 20px;
-            font-size: 120%;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            font-size: 16px;
+            line-height: 1.6;
         }
         
         header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 30px;
+            max-width: 1200px;
+            margin-left: auto;
+            margin-right: auto;
         }
         
         h1 {
             color: var(--accent);
+            font-size: 2rem;
         }
         
-        .header-links a {
+        nav.header-links a {
             color: var(--text-dim);
             text-decoration: none;
             margin-left: 20px;
-            font-size: 1.4rem;
-        }
-        
-        .header-links a:hover {
-            color: var(--accent);
-        }
-        
-        .controls {
-            background: var(--bg-card);
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            align-items: flex-end;
-        }
-        
-        .control-group {
-            display: flex;
-            flex-direction: column;
-            gap: 5px;
-        }
-        
-        .control-group label {
-            font-size: 1.2rem;
-            color: var(--text-dim);
-            text-transform: uppercase;
-        }
-        
-        select, input[type="date"], input[type="number"] {
-            background: var(--bg-dark);
-            border: 1px solid #333;
-            color: var(--text);
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 1.4rem;
-        }
-        
-        select:focus, input:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-        
-        button {
-            background: var(--accent);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1.4rem;
-            font-weight: 600;
-        }
-        
-        button:hover {
-            background: var(--accent-dim);
-        }
-        
-        button:disabled {
-            background: #444;
-            cursor: not-allowed;
-        }
-        
-        button.secondary {
-            background: #333;
-            border: 1px solid #555;
-        }
-        
-        button.secondary:hover {
-            background: #444;
-        }
-        
-        button.secondary.active {
-            background: var(--accent-dim);
-            border-color: var(--accent);
-        }
-        
-        .stats-summary {
-            background: var(--bg-card);
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            gap: 30px;
-            flex-wrap: wrap;
-            font-size: 1.4rem;
-        }
-        
-        .stats-summary span {
-            color: var(--text-dim);
-        }
-        
-        .stats-summary strong {
-            color: var(--text);
-        }
-        
-        .query-time {
-            margin-left: auto;
-            color: var(--text-dim);
-            font-size: 1.2rem;
-        }
-        
-        .table-container {
-            background: var(--bg-card);
-            border-radius: 8px;
-            overflow-x: auto;
-            overflow-y: auto;
-            min-height: 400px;
-            flex: 1;
-        }
-        
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            min-width: 900px;
-        }
-        
-        th, td {
-            padding: 5px 6px;
-            text-align: left;
-        }
-        
-        th {
-            background: var(--bg-dark);
-            font-weight: 600;
-            font-size: 1.2rem;
-            text-transform: uppercase;
-            color: var(--text-dim);
-            cursor: pointer;
-            user-select: none;
-            white-space: nowrap;
-        }
-        
-        /* Min-width for all columns to prevent jumping when filtered */
-        th[data-sort="cardName"] { min-width: 180px; }
-        th[data-sort="side"] { min-width: 100px; }
-        th[data-sort="culture"] { min-width: 110px; }
-        th[data-sort="games"] { min-width: 80px; }
-        th[data-sort="inclusion_wr"] { min-width: 85px; }
-        th[data-sort="unique_players"] { min-width: 90px; }
-        th[data-sort="played_games"] { min-width: 90px; }
-        th[data-sort="played_wr"] { min-width: 85px; }
-        th[data-sort="priority"] { min-width: 100px; }
-        
-        th:hover {
-            color: var(--accent);
-        }
-        
-        th.sorted {
-            color: var(--accent);
-        }
-        
-        th.sorted::after {
-            content: ' ▼';
-        }
-        
-        th.sorted.asc::after {
-            content: ' ▲';
-        }
-        
-        tr:nth-child(even) {
-            background: rgba(0,0,0,0.2);
-        }
-        
-        tr:hover {
-            background: rgba(233, 69, 96, 0.1);
-        }
-        
-        .blueprint {
-            font-family: monospace;
-            color: var(--text-dim);
-            font-size: 1.2rem;
-        }
-        
-        .side-fp {
-            color: var(--fp-color);
-        }
-        
-        .side-shadow {
-            color: var(--shadow-color);
-        }
-        
-        .culture {
-            font-size: 1.2rem
-        }
-        
-        .wr-positive {
-            color: var(--positive);
-        }
-        
-        .wr-negative {
-            color: var(--negative);
-        }
-        
-        .wr-neutral {
-            color: var(--neutral);
-        }
-        
-        .bar-cell {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .bar-cell .bar {
-            width: 50px;
-            height: 8px;
-            background: #333;
-            border-radius: 4px;
-            overflow: hidden;
-        }
-        
-        .bar-cell .bar-fill {
-            height: 100%;
-            border-radius: 4px;
-        }
-        
-        .bar-cell .bar-fill.positive {
-            background: var(--positive);
-        }
-        
-        .bar-cell .bar-fill.negative {
-            background: var(--negative);
-        }
-        
-        .bar-cell .bar-fill.played {
-            background: var(--played-bar);
-        }
-        
-        .bar-cell .bar-fill.players {
-            background: var(--fp-color);
-        }
-        
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-dim);
-        }
-        
-        .error {
-            background: rgba(248, 113, 113, 0.2);
-            border: 1px solid var(--negative);
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        
-        .checkbox-group {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .checkbox-group.vertical {
-            flex-direction: column;
-            gap: 4px;
-        }
-        
-        .checkbox-group label {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 1.4rem;
-            cursor: pointer;
-        }
-        
-        .checkbox-group.vertical label {
-            font-size: 1.2rem;
-        }
-        
-        .checkbox-group input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-        }
-        
-        .checkbox-group label[title] {
-            border-bottom: 1px dotted var(--text-dim);
-        }
-        
-        .toggle-group {
-            display: flex;
-            gap: 5px;
-        }
-        
-        .date-row {
-            display: flex;
-            gap: 15px;
-            align-items: flex-end;
-        }
-        
-        /* Sticky toolbar */
-        .sticky-toolbar {
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            background: var(--bg-dark);
-            padding: 10px 0;
-        }
-        
-        /* Sticky table header */
-        .table-container thead {
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        
-        .table-container th {
-            background: var(--bg-dark);
-        }
-        
-        /* Search box */
-        .search-box {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .search-box input {
-            background: var(--bg-dark);
-            border: 1px solid #333;
-            color: var(--text);
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-size: 1.2rem;
-            width: 200px;
-        }
-        
-        .search-box input:focus {
-            outline: none;
-            border-color: var(--accent);
-        }
-        
-        .search-box input::placeholder {
-            color: var(--text-dim);
-        }
-        
-        .search-nav {
-            display: flex;
-            gap: 4px;
-        }
-        
-        .search-nav button {
-            padding: 6px 10px;
             font-size: 1rem;
         }
         
-        .search-count {
-            color: var(--text-dim);
-            font-size: 1rem;
-            min-width: 60px;
-        }
-        
-        .table-nav {
-            display: flex;
-            gap: 4px;
-            margin-left: 10px;
-        }
-        
-        .table-nav button {
-            padding: 6px 10px;
-            font-size: 1rem;
-        }
-        
-        .highlight-row {
-            background: rgba(233, 69, 96, 0.3) !important;
-        }
-        
-        /* Card image popup */
-        .card-popup {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            pointer-events: none;
-            width: 600px;
-            height: 600px;
-        }
-
-        .card-popup img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            border-radius: 12px;
-        }
-        
-        .card-cell {
-            cursor: pointer;
-        }
-        
-        .card-cell:hover {
+        nav.header-links a:hover {
             color: var(--accent);
         }
         
-        .card-cell .subtitle {
-            color: var(--text-dim);
+        .content {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            padding: 25px 30px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+        }
+        
+        .card h2 {
+            color: var(--accent);
+            margin-bottom: 15px;
+            font-size: 1.4rem;
+        }
+        
+        .card h3 {
+            color: var(--text);
+            margin: 20px 0 10px 0;
             font-size: 1.1rem;
         }
         
-        .card-cell .blueprint {
-            font-family: monospace;
-            color: var(--text-dim);
-            font-size: 1.1rem;
+        .card p {
+            margin-bottom: 15px;
+            color: var(--text);
         }
         
-        .culture-icon {
-            width: 50px;
-            height: 50px;
-            vertical-align: middle;
-            -webkit-filter: invert(100%); /* Safari/Chrome */
-            filter: invert(100%);
+        .card ul {
+            margin-left: 25px;
+            margin-bottom: 15px;
         }
         
-        .catalog-status {
-            font-size: 1.2rem
-            color: var(--text-dim);
-            margin-left: 10px;
+        .card li {
+            margin-bottom: 8px;
         }
         
-        .catalog-status.loading {
-            color: var(--neutral);
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
         }
         
-        .catalog-status.loaded {
-            color: var(--positive);
-        }
-        
-        .catalog-status.error {
-            color: var(--negative);
-        }
-        
-        /* Column filter dropdown */
-        .filter-header {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        
-        .filter-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 2px 4px;
-            opacity: 0.6;
-            transition: opacity 0.2s, filter 0.2s;
-            display: flex;
-            align-items: center;
-        }
-        
-        .filter-btn img {
-            width: 25px;
-            height: 25px;
-            filter: brightness(0) invert(0.6);
-        }
-        
-        .filter-btn:hover {
-            opacity: 1;
-        }
-        
-        .filter-btn:hover img {
-            filter: brightness(0) invert(0.4) sepia(1) saturate(5) hue-rotate(314deg);
-        }
-        
-        .filter-btn.active {
-            opacity: 1;
-        }
-        
-        .filter-btn.active img {
-            filter: brightness(0) invert(0.4) sepia(1) saturate(5) hue-rotate(314deg);
-        }
-        
-        .filter-dropdown {
-            display: none;
-            position: absolute;
-            top: 100%;
-            left: 0;
+        .quick-link {
             background: var(--bg-card);
-            border: 1px solid #444;
-            border-radius: 6px;
-            min-width: 280px;
-            max-height: 300px;
-            overflow-y: auto;
-            z-index: 200;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            padding: 25px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text);
+            transition: transform 0.2s, border-color 0.2s;
+            border: 2px solid transparent;
         }
         
-        .filter-dropdown.show {
-            display: block;
+        .quick-link:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
         }
         
-        .filter-actions {
-            display: flex;
-            gap: 4px;
-            padding: 8px;
-            border-bottom: 1px solid #333;
+        .quick-link h3 {
+            color: var(--accent);
+            margin-bottom: 10px;
+            font-size: 1.2rem;
         }
         
-        .filter-actions button {
-            flex: 1;
-            padding: 4px 8px;
-            font-size: 0.85rem;
-        }
-        
-        .filter-options {
-            padding: 8px;
-        }
-        
-        .filter-option {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 4px 0;
-            cursor: pointer;
+        .quick-link p {
+            color: var(--text-dim);
             font-size: 0.95rem;
         }
         
-        .filter-option:hover {
-            color: var(--accent);
+        .warning-box {
+            background: rgba(251, 191, 36, 0.1);
+            border-left: 4px solid var(--warning);
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
         }
         
-        .filter-option input {
+        .warning-box strong {
+            color: var(--warning);
+        }
+        
+        .info-box {
+            background: rgba(74, 222, 128, 0.1);
+            border-left: 4px solid var(--positive);
+            padding: 15px 20px;
+            margin: 15px 0;
+            border-radius: 0 8px 8px 0;
+        }
+        
+        code {
+            background: var(--bg-dark);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9em;
+        }
+        
+        .stat-explanation {
+            display: grid;
+            grid-template-columns: 150px 1fr;
+            gap: 10px 20px;
+            margin: 15px 0;
+        }
+        
+        .stat-explanation dt {
+            color: var(--accent);
+            font-weight: 600;
+        }
+        
+        .stat-explanation dd {
+            color: var(--text-dim);
+        }
+        
+        .color-sample {
+            display: inline-block;
             width: 14px;
             height: 14px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-right: 5px;
         }
         
-        th {
-            position: relative;
+        .color-green { background: var(--positive); }
+        .color-yellow { background: var(--warning); }
+        .color-red { background: var(--negative); }
+        
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--bg-card);
+            color: var(--text-dim);
+            font-size: 0.9rem;
         }
         
-        @media (max-width: 768px) {
-            .controls {
-                flex-direction: column;
-            }
-            
-            .control-group {
-                width: 100%;
-            }
-            
-            select, input {
-                width: 100%;
-            }
-            
-            header {
-                flex-direction: column;
-                gap: 10px;
-            }
+        footer a {
+            color: var(--accent);
+            text-decoration: none;
         }
     </style>
 </head>
 <body>
     <header>
-        <h1>GEMP Card Analytics <span id="catalogStatus" class="catalog-status"></span></h1>
-        <div class="header-links">
-            <a href="/admin">Admin</a>
-        </div>
+        <h1>GEMP Card Analytics</h1>
+        <nav class="header-links">
+            <a href="/query.html">Query Tool</a>
+            <a href="/archetypes.html">Archetypes</a>
+            <a href="/admin.html">Admin</a>
+            <a href="/docs">API Docs</a>
+        </nav>
     </header>
     
-    <div class="controls">
-        <div class="control-group">
-            <label>Format</label>
-            <select id="format">
-                <optgroup label="PC Formats">
-                    <option value="Movie Block (PC)">PC-Movie</option>
-                    <option value="Fellowship Block (PC)">PC-Fellowship</option>
-                    <option value="Expanded (PC)">PC-Expanded</option>
-                </optgroup>
-                <optgroup label="Main Decipher Formats">
-                    <option value="Movie Block">Movie Block</option>
-                    <option value="Fellowship Block">Fellowship Block</option>
-                    <option value="Expanded">Expanded</option>
-                    <option value="Towers Standard">Towers Standard</option>
-                    <option value="Towers Block">Towers Block</option>
-                </optgroup>
-                <optgroup label="Sealed Formats">
-                    <option value="Limited - FOTR">Limited - FOTR</option>
-                    <option value="Limited - TTT">Limited - TTT</option>
-                    <option value="Limited - ROTK">Limited - ROTK</option>
-                    <option value="Limited - WOTR">Limited - WOTR</option>
-                    <option value="Limited - TH">Limited - TH</option>
-                </optgroup>
-            </select>
+    <div class="content">
+        <div class="quick-links">
+            <a href="/query.html" class="quick-link">
+                <h3>📊 Card Statistics</h3>
+                <p>Query win rates, play rates, and trends across formats and time periods.</p>
+            </a>
+            <a href="/archetypes.html" class="quick-link">
+                <h3>🎴 Archetype Explorer</h3>
+                <p>Discover detected deck archetypes and the cards that define them.</p>
+            </a>
+            <a href="/admin.html" class="quick-link">
+                <h3>⚙️ Admin Panel</h3>
+                <p>Manage data ingestion, patches, and system settings.</p>
+            </a>
         </div>
         
-        <div class="control-group">
-            <label>Patch / Date Range</label>
-            <select id="patchSelect" onchange="onPatchChange()">
-                <option value="">Custom Date Range</option>
-            </select>
+        <div class="card">
+            <h2>Understanding the Statistics</h2>
+            
+            <dl class="stat-explanation">
+                <dt>Games</dt>
+                <dd>Number of games where this card appeared in at least one player's deck.</dd>
+                
+                <dt>Inclusion WR</dt>
+                <dd>Win rate when the card is in your deck, whether played or not.</dd>
+                
+                <dt>Players</dt>
+                <dd>Unique players who included this card (helps identify "pet decks" vs meta trends).</dd>
+                
+                <dt>Played</dt>
+                <dd>Number of times this card was actually played from hand (not just sitting in deck).</dd>
+                
+                <dt>Play WR</dt>
+                <dd>Win rate specifically when this card was played. Most meaningful for events/conditions.</dd>
+                
+                <dt>Priority</dt>
+                <dd>Games × (WinRate - 0.5). Combines popularity with impact—high priority cards are both common and influential.</dd>
+            </dl>
+            
+            <h3>Win Rate Color Coding</h3>
+            <p>
+                <span class="color-sample color-green"></span><strong>Green (47-53%):</strong> Balanced—close to the expected 50% baseline.<br>
+                <span class="color-sample color-yellow"></span><strong>Yellow (40-46% or 54-60%):</strong> Slightly skewed—worth watching.<br>
+                <span class="color-sample color-red"></span><strong>Red (&lt;40% or &gt;60%):</strong> Significantly imbalanced—may indicate design issues.
+            </p>
         </div>
         
-        <div class="date-row">
-            <div class="control-group">
-                <label>Start Date</label>
-                <input type="date" id="startDate" onchange="onDateManualChange()">
+        <div class="card">
+            <h2>Known Data Issues</h2>
+            
+            <div class="warning-box">
+                <strong>⚠️ Attached Zone Bug</strong>
+                <p style="margin-top: 8px; margin-bottom: 0;">
+                    Cards that remain attached at game end (weapons, armor, conditions on characters) are incorrectly 
+                    recorded as "not played" even though they were played earlier in the game. This primarily affects 
+                    <strong>Play WR</strong> for possessions and conditions—the Inclusion WR remains accurate.
+                </p>
             </div>
             
-            <div class="control-group">
-                <label>End Date</label>
-                <input type="date" id="endDate" onchange="onDateManualChange()">
-            </div>
+            <p>
+                This bug causes equipment-heavy strategies to appear less played than they actually are. 
+                We're working on a fix, but in the meantime, treat Play WR for attachments with skepticism 
+                and rely more on Inclusion WR for those card types.
+            </p>
+            
+            <h3>Other Considerations</h3>
+            <ul>
+                <li><strong>Bot games are excluded</strong> — Games against AI opponents don't contribute to statistics.</li>
+                <li><strong>Sample size matters</strong> — Cards with fewer than 50-100 games may have unreliable statistics.</li>
+                <li><strong>Meta context</strong> — A card's win rate depends on what it's being played against. A "bad" card might just be poorly positioned in the current meta.</li>
+                <li><strong>Correlation ≠ Causation</strong> — High win rate doesn't mean the card is causing wins. Strong players might favor certain cards.</li>
+            </ul>
         </div>
         
-        <div class="control-group">
-            <label title="What portion of the card pool to display, sorted by games played">Show Cards</label>
-            <select id="showPercent">
-                <option value="10">Top 10%</option>
-                <option value="20">Top 20%</option>
-                <option value="50" selected>Top 50%</option>
-                <option value="75">Top 75%</option>
-                <option value="100">All Cards</option>
-            </select>
+        <div class="card">
+            <h2>Tips for Analysis</h2>
+            
+            <div class="info-box">
+                <strong>💡 Pro Tip:</strong> When analyzing a specific card, check both Inclusion WR and Play WR. 
+                If Inclusion WR is high but Play WR is low, the card might be good to have in deck but situational to play.
+                If both are high, it's consistently impactful.
+            </div>
+            
+            <ul>
+                <li><strong>Use the Players column</strong> to distinguish meta staples from one player's pet tech. A card with 1000 games but only 3 players is one person's grind.</li>
+                <li><strong>Filter by competitive tier</strong> to see how cards perform at different skill levels. Tournament data may differ significantly from casual play.</li>
+                <li><strong>Compare formats</strong> to understand how the card pool affects individual card performance.</li>
+                <li><strong>Use date filters</strong> to track how cards perform after balance patches.</li>
+                <li><strong>Share your queries</strong> — Use the Share button to copy a link with your current filters for discussion.</li>
+            </ul>
         </div>
         
-        <div class="control-group">
-            <label title="Minimum games for statistical significance">Min Games</label>
-            <input type="number" id="minGames" value="5" min="1" max="100">
-        </div>
-        
-        <div class="control-group">
-            <label>Outcome Tiers</label>
-            <div class="checkbox-group vertical">
-                <label title="Clear game-ending: Site 9 survival, Ring-bearer corrupted or killed">
-                    <input type="checkbox" value="1" checked class="outcome-tier"> Decisive
-                </label>
-                <label title="Concession or timeout at site 6 or later">
-                    <input type="checkbox" value="2" checked class="outcome-tier"> Late Concede
-                </label>
-                <label title="Early quit, bot errors, or unclear outcome">
-                    <input type="checkbox" value="3" class="outcome-tier"> Ambiguous
-                </label>
-            </div>
-        </div>
-        
-        <div class="control-group">
-            <label>Competitive Tiers</label>
-            <div class="checkbox-group vertical">
-                <label title="Unranked pickup games">
-                    <input type="checkbox" value="1" checked class="competitive-tier"> Casual
-                </label>
-                <label title="Scheduled league matches">
-                    <input type="checkbox" value="2" checked class="competitive-tier"> League
-                </label>
-                <label title="Bracket tournament games">
-                    <input type="checkbox" value="3" checked class="competitive-tier"> Tournament
-                </label>
-                <label title="World Championship circuit events">
-                    <input type="checkbox" value="4" checked class="competitive-tier"> Championship
-                </label>
-            </div>
-        </div>
-        
-        <button id="fetchBtn" onclick="fetchStats()">Load Stats</button>
-    </div>
-    
-    <div id="error" class="error" style="display: none;"></div>
-    
-    <div id="summary" class="stats-summary" style="display: none;">
-        <div><span>Showing:</span> <strong id="showingCards">-</strong></div>
-        <div><span>Date Range:</span> <strong id="dateRange">-</strong></div>
-        <div><span>Filters:</span> <strong id="filterInfo">-</strong></div>
-        <div class="query-time"><span id="queryTime">-</span></div>
-    </div>
-    
-    <div class="sticky-toolbar">
-        <div class="controls priority-controls" style="padding: 10px 20px; justify-content: space-between;">
-            <div class="search-box">
-                <input type="text" id="cardSearch" placeholder="Search cards..." onkeyup="handleSearchKeyup(event)">
-                <div class="search-nav">
-                    <button class="secondary" onclick="searchPrev()">▲</button>
-                    <button class="secondary" onclick="searchNext()">▼</button>
-                </div>
-                <span class="search-count" id="searchCount"></span>
-                <div class="table-nav">
-                    <button class="secondary" onclick="scrollToTop()" title="Go to top">⤒</button>
-                    <button class="secondary" onclick="scrollToBottom()" title="Go to bottom">⤓</button>
-                </div>
-            </div>
-            <div class="control-group">
-                <label>Priority Sort</label>
-                <div class="toggle-group">
-                    <button id="absToggle" class="secondary" onclick="toggleAbsSort(true)">
-                        Horseshoe
-                    </button>
-                    <button id="signedToggle" class="secondary active" onclick="toggleAbsSort(false)">
-                        Full Range
-                    </button>
-                </div>
-            </div>
+        <div class="card">
+            <h2>About This Tool</h2>
+            <p>
+                GEMP Card Analytics processes game replay data to provide win rate statistics for the 
+                Lord of the Rings Trading Card Game. Data is aggregated daily and includes games from 
+                all tracked formats.
+            </p>
+            <p>
+                The archetype detection uses graph clustering algorithms to identify cards that 
+                frequently appear together, helping map the deck-building landscape without manual curation.
+            </p>
+            <p>
+                Questions or feedback? Visit the <a href="https://github.com/PlayersCouncil/gemp-lotr" target="_blank">GEMP GitHub</a> 
+                or join the community Discord.
+            </p>
         </div>
     </div>
     
-    <div class="table-container">
-        <table id="statsTable">
-            <thead>
-                <tr>
-                    <th data-sort="cardName">Card</th>
-                    <th data-sort="side">Side</th>
-                    <th data-sort="culture">Culture</th>
-                    <th data-sort="games">Games</th>
-                    <th data-sort="inclusion_wr">Incl WR</th>
-                    <th data-sort="unique_players">Players</th>
-                    <th data-sort="played_games">Played</th>
-                    <th data-sort="played_wr">Play WR</th>
-                    <th data-sort="priority" class="sorted">Priority</th>
-                </tr>
-            </thead>
-            <tbody id="statsBody">
-                <tr><td colspan="9" class="loading">Select filters and click Load Stats</td></tr>
-            </tbody>
-        </table>
-    </div>
-    
-    <!-- Card image popup -->
-    <div id="cardPopup" class="card-popup">
-        <img id="cardImage" src="" alt="Card">
-    </div>
-
-    <script>
-        let currentData = [];
-        let allFetchedData = [];
-        let currentSort = { field: 'priority', asc: false };
-        let useAbsoluteSort = false;
-        let queryStartTime = null;
-        let patches = [];
-        let catalog = {};  // Blueprint -> card info
-        let columnFilters = {};  // columnKey -> ColumnFilter instance
-        
-        // Set number -> display name mapping
-        const setDisplayMap = {
-            0: '0 - Promo',
-            1: '1 - Fellowship of the Ring',
-            2: '2 - Mines of Moria',
-            3: '3 - Realms of the Elf-lords',
-            4: '4 - The Two Towers',
-            5: '5 - Battle of Helm\'s Deep',
-            6: '6 - Ents of Fangorn',
-            7: '7 - Return of the King',
-            8: '8 - Siege of Gondor',
-            9: '9 - Reflections',
-            10: '10 - Mount Doom',
-            11: '11 - Shadows',
-            12: '12 - Black Rider',
-            13: '13 - Bloodlines',
-            14: '14 - Expanded Middle-earth',
-            15: '15 - The Hunters',
-            16: '16 - The Wraith Collection',
-            17: '17 - Rise of Saruman',
-            18: '18 - Treachery & Deceit',
-            19: '19 - Ages End',
-            // PC Sets
-            101: 'V1 - Shadow of the Past',
-            102: 'V2 - King of the Golden Hall',
-            103: 'V3 - The Pelennor Fields',
-        };
-        
-        function getSetDisplay(setNum) {
-            return setDisplayMap[setNum] || `Set ${setNum}`;
-        }
-        
-        // Normalize errata sets to their base sets (50-69 → 0-19)
-        function normalizeSetNumber(setNum) {
-            if (setNum >= 50 && setNum <= 69) {
-                return setNum - 50;
-            }
-            return setNum;
-        }
-        
-        // Column Filter Class
-        class ColumnFilter {
-            constructor(columnKey, headerSelector, getValueFn, getDisplayFn = null) {
-                this.columnKey = columnKey;
-                this.headerEl = document.querySelector(headerSelector);
-                this.getValue = getValueFn;
-                this.getDisplay = getDisplayFn || (v => v || '(empty)');
-                this.selectedValues = new Set();
-                this.allValues = [];
-                this.isAllSelected = true;
-                this.dropdown = null;
-                
-                this.setupUI();
-            }
-            
-            setupUI() {
-                if (!this.headerEl) return;
-                
-                // Wrap header content
-                const originalContent = this.headerEl.innerHTML;
-                this.headerEl.innerHTML = `
-                    <div class="filter-header">
-                        <span class="header-text">${originalContent}</span>
-                        <button class="filter-btn" title="Filter"><img src="/static/images/filter.svg" alt="Filter"></button>
-                    </div>
-                    <div class="filter-dropdown"></div>
-                `;
-                
-                this.filterBtn = this.headerEl.querySelector('.filter-btn');
-                this.dropdown = this.headerEl.querySelector('.filter-dropdown');
-                
-                // Toggle dropdown on button click (stop propagation to prevent sort)
-                this.filterBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleDropdown();
-                });
-                
-                // Stop propagation on dropdown itself
-                this.dropdown.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                });
-                
-                // Close dropdown when clicking elsewhere
-                document.addEventListener('click', (e) => {
-                    if (!this.headerEl.contains(e.target)) {
-                        this.closeDropdown();
-                    }
-                });
-            }
-            
-            populate(data) {
-                // Extract unique values
-                const valueSet = new Set();
-                data.forEach(row => {
-                    const val = this.getValue(row);
-                    if (val !== null && val !== undefined) {
-                        valueSet.add(val);
-                    }
-                });
-                
-                this.allValues = Array.from(valueSet).sort((a, b) => {
-                    const dispA = this.getDisplay(a);
-                    const dispB = this.getDisplay(b);
-                    return String(dispA).localeCompare(String(dispB), undefined, {numeric: true});
-                });
-                
-                // Select all by default
-                this.selectedValues = new Set(this.allValues);
-                this.isAllSelected = true;
-                this.updateButtonState();
-                this.renderDropdown();
-            }
-            
-            renderDropdown() {
-                if (!this.dropdown) return;
-                
-                const optionsHtml = this.allValues.map(val => `
-                    <label class="filter-option">
-                        <input type="checkbox" value="${val}" ${this.selectedValues.has(val) ? 'checked' : ''}>
-                        ${this.getDisplay(val)}
-                    </label>
-                `).join('');
-                
-                this.dropdown.innerHTML = `
-                    <div class="filter-actions">
-                        <button class="secondary" onclick="columnFilters['${this.columnKey}'].selectAll()">All</button>
-                        <button class="secondary" onclick="columnFilters['${this.columnKey}'].selectNone()">None</button>
-                    </div>
-                    <div class="filter-options">${optionsHtml}</div>
-                `;
-                
-                // Add change listeners to checkboxes
-                this.dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.addEventListener('change', (e) => {
-                        e.stopPropagation();
-                        const val = this.parseValue(cb.value);
-                        if (cb.checked) {
-                            this.selectedValues.add(val);
-                        } else {
-                            this.selectedValues.delete(val);
-                        }
-                        this.isAllSelected = this.selectedValues.size === this.allValues.length;
-                        this.updateButtonState();
-                        applyFiltersAndRender();
-                    });
-                });
-            }
-            
-            parseValue(strVal) {
-                // Try to return original type (number vs string)
-                const num = Number(strVal);
-                if (!isNaN(num) && this.allValues.includes(num)) {
-                    return num;
-                }
-                return strVal;
-            }
-            
-            selectAll() {
-                this.selectedValues = new Set(this.allValues);
-                this.isAllSelected = true;
-                this.updateButtonState();
-                this.renderDropdown();
-                applyFiltersAndRender();
-            }
-            
-            selectNone() {
-                this.selectedValues.clear();
-                this.isAllSelected = false;
-                this.updateButtonState();
-                this.renderDropdown();
-                applyFiltersAndRender();
-            }
-            
-            toggleDropdown() {
-                this.dropdown.classList.toggle('show');
-            }
-            
-            closeDropdown() {
-                this.dropdown.classList.remove('show');
-            }
-            
-            updateButtonState() {
-                if (this.filterBtn) {
-                    this.filterBtn.classList.toggle('active', !this.isAllSelected);
-                }
-            }
-            
-            isVisible(row) {
-                if (this.isAllSelected) return true;
-                const val = this.getValue(row);
-                return this.selectedValues.has(val);
-            }
-        }
-        
-        // Initialize column filters after DOM ready
-        function initColumnFilters() {
-            columnFilters = {
-                side: new ColumnFilter('side', 'th[data-sort="side"]', 
-                    row => row.side,
-                    val => val === 'free_peoples' ? 'Free Peoples' : val === 'shadow' ? 'Shadow' : val || '(none)'
-                ),
-                culture: new ColumnFilter('culture', 'th[data-sort="culture"]',
-                    row => row.culture,
-                    val => val || '(none)'
-                ),
-                set: new ColumnFilter('set', 'th[data-sort="cardName"]',
-                    row => normalizeSetNumber(row.setNumber),  // Use normalized set for filtering
-                    val => getSetDisplay(val)
-                )
-            };
-        }
-        
-        // Call after DOM ready
-        initColumnFilters();
-        
-        function applyFiltersAndRender() {
-            // Apply percentage filter first
-            const percent = parseInt(document.getElementById('showPercent').value);
-            const count = Math.ceil(allFetchedData.length * (percent / 100));
-            let filtered = allFetchedData.slice(0, count);
-            
-            // Apply column filters
-            Object.values(columnFilters).forEach(filter => {
-                filtered = filtered.filter(row => filter.isVisible(row));
-            });
-            
-            currentData = filtered;
-            
-            document.getElementById('showingCards').textContent = 
-                `${currentData.length} of ${allFetchedData.length} (${percent}%)`;
-            
-            sortAndRender();
-        }
-        
-        // Load catalog and patches on startup
-        loadCatalog();
-        loadPatches();
-        
-        // Set default dates (last 90 days)
-        const today = new Date();
-        const ninetyDaysAgo = new Date(today);
-        ninetyDaysAgo.setDate(today.getDate() - 90);
-        
-        document.getElementById('endDate').value = today.toISOString().split('T')[0];
-        document.getElementById('startDate').value = ninetyDaysAgo.toISOString().split('T')[0];
-        
-        async function loadCatalog() {
-            const status = document.getElementById('catalogStatus');
-            status.textContent = '(loading...)';
-            status.className = 'catalog-status loading';
-            
-            try {
-                // Load catalog for card lookups
-                const catalogResponse = await fetch('/api/catalog');
-                const catalogData = await catalogResponse.json();
-                catalog = catalogData.cards;
-                
-                // Load game count for display
-                const statsResponse = await fetch('/api/stats/summary');
-                const statsData = await statsResponse.json();
-                
-                status.textContent = `(${statsData.total_games.toLocaleString()} games)`;
-                status.className = 'catalog-status loaded';
-            } catch (err) {
-                console.error('Failed to load:', err);
-                status.textContent = '(error)';
-                status.className = 'catalog-status error';
-            }
-        }
-        
-        async function loadPatches() {
-            try {
-                const response = await fetch('/api/patches');
-                const data = await response.json();
-                patches = data.patches.sort((a, b) => new Date(b.patch_date) - new Date(a.patch_date));
-                
-                const select = document.getElementById('patchSelect');
-                patches.forEach((patch, idx) => {
-                    const option = document.createElement('option');
-                    option.value = idx.toString();
-                    option.textContent = `${patch.patch_name} (${patch.patch_date})`;
-                    select.appendChild(option);
-                });
-            } catch (err) {
-                console.error('Failed to load patches:', err);
-            }
-        }
-        
-        function onPatchChange() {
-            const select = document.getElementById('patchSelect');
-            const idx = select.value;
-            
-            if (idx === '') return;
-            
-            const patch = patches[parseInt(idx)];
-            const nextPatch = patches[parseInt(idx) - 1];
-            
-            document.getElementById('startDate').value = patch.patch_date;
-            
-            if (nextPatch) {
-                const endDate = new Date(nextPatch.patch_date);
-                endDate.setDate(endDate.getDate() - 1);
-                document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
-            } else {
-                document.getElementById('endDate').value = today.toISOString().split('T')[0];
-            }
-        }
-        
-        function onDateManualChange() {
-            document.getElementById('patchSelect').value = '';
-        }
-        
-        // Sort handlers
-        document.querySelectorAll('th[data-sort]').forEach(th => {
-            th.addEventListener('click', () => {
-                const field = th.dataset.sort;
-                if (currentSort.field === field) {
-                    currentSort.asc = !currentSort.asc;
-                } else {
-                    currentSort.field = field;
-                    currentSort.asc = false;
-                }
-                sortAndRender();
-                updateSortIndicators();
-            });
-        });
-        
-        function updateSortIndicators() {
-            document.querySelectorAll('th[data-sort]').forEach(th => {
-                th.classList.remove('sorted', 'asc');
-                if (th.dataset.sort === currentSort.field) {
-                    th.classList.add('sorted');
-                    if (currentSort.asc) th.classList.add('asc');
-                }
-            });
-        }
-        
-        function toggleAbsSort(useAbs) {
-            useAbsoluteSort = useAbs;
-            document.getElementById('absToggle').classList.toggle('active', useAbs);
-            document.getElementById('signedToggle').classList.toggle('active', !useAbs);
-            
-            if (currentSort.field === 'priority') {
-                sortAndRender();
-            }
-        }
-        
-        function getCheckedValues(className) {
-            const checked = [];
-            document.querySelectorAll(`.${className}:checked`).forEach(cb => {
-                checked.push(cb.value);
-            });
-            return checked;
-        }
-        
-        async function fetchStats() {
-            const btn = document.getElementById('fetchBtn');
-            const errorDiv = document.getElementById('error');
-            const tbody = document.getElementById('statsBody');
-            
-            btn.disabled = true;
-            btn.textContent = 'Loading...';
-            errorDiv.style.display = 'none';
-            tbody.innerHTML = '<tr><td colspan="9" class="loading">Loading...</td></tr>';
-            
-            queryStartTime = performance.now();
-            
-            try {
-                const format = document.getElementById('format').value;
-                const startDate = document.getElementById('startDate').value;
-                const endDate = document.getElementById('endDate').value;
-                const minGames = document.getElementById('minGames').value;
-                const outcomeTiers = getCheckedValues('outcome-tier');
-                const competitiveTiers = getCheckedValues('competitive-tier');
-                
-                let url = `/api/stats/cards?format=${encodeURIComponent(format)}&limit=5000`;
-                if (startDate) url += `&start=${startDate}`;
-                if (endDate) url += `&end=${endDate}`;
-                if (minGames) url += `&min_games=${minGames}`;
-                if (outcomeTiers.length > 0 && outcomeTiers.length < 3) {
-                    url += `&outcome_tier=${outcomeTiers.join(',')}`;
-                }
-                if (competitiveTiers.length > 0 && competitiveTiers.length < 4) {
-                    url += `&competitive_tier=${competitiveTiers.join(',')}`;
-                }
-                
-                const response = await fetch(url);
-                const queryEndTime = performance.now();
-                const queryDuration = ((queryEndTime - queryStartTime) / 1000).toFixed(2);
-                
-                if (!response.ok) {
-                    const err = await response.json();
-                    let msg = 'Failed to fetch stats';
-                    if (err.detail) {
-                        if (typeof err.detail === 'string') {
-                            msg = err.detail;
-                        } else if (Array.isArray(err.detail)) {
-                            msg = err.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join('; ');
-                        }
-                    }
-                    throw new Error(msg);
-                }
-                
-                const data = await response.json();
-                
-                // Enrich with catalog data and sort by games
-                allFetchedData = data.cards.map(card => {
-                    const info = catalog[card.blueprint] || {};
-                    return {
-                        ...card,
-                        cardName: info.name || card.blueprint,
-                        side: info.side || '',
-                        culture: info.culture || '',
-                        setNumber: info.set,
-                        image: info.image || ''
-                    };
-                }).sort((a, b) => b.games - a.games);
-                
-                // Populate column filters with current data
-                Object.values(columnFilters).forEach(filter => {
-                    filter.populate(allFetchedData);
-                });
-                
-                applyFiltersAndRender();
-                
-                document.getElementById('summary').style.display = 'flex';
-                document.getElementById('dateRange').textContent = 
-                    `${data.date_range.start || 'all'} to ${data.date_range.end || 'now'}`;
-                document.getElementById('filterInfo').textContent = 
-                    `Outcome: ${outcomeTiers.join(',') || 'all'}, Competitive: ${competitiveTiers.join(',') || 'all'}`;
-                document.getElementById('queryTime').textContent = 
-                    `Query: ${queryDuration}s | ${allFetchedData.length} total cards`;
-                
-            } catch (err) {
-                errorDiv.textContent = err.message;
-                errorDiv.style.display = 'block';
-                tbody.innerHTML = '<tr><td colspan="9" class="loading">Error loading data</td></tr>';
-            } finally {
-                btn.disabled = false;
-                btn.textContent = 'Load Stats';
-            }
-        }
-        
-        document.getElementById('showPercent').addEventListener('change', () => {
-            if (allFetchedData.length > 0) {
-                applyFiltersAndRender();
-            }
-        });
-        
-        function sortAndRender() {
-            const sorted = [...currentData].sort((a, b) => {
-                let aVal = a[currentSort.field];
-                let bVal = b[currentSort.field];
-                
-                if (aVal === null || aVal === undefined) aVal = currentSort.field === 'cardName' ? '' : -Infinity;
-                if (bVal === null || bVal === undefined) bVal = currentSort.field === 'cardName' ? '' : -Infinity;
-                
-                if (currentSort.field === 'priority' && useAbsoluteSort) {
-                    aVal = Math.abs(aVal);
-                    bVal = Math.abs(bVal);
-                }
-                
-                if (typeof aVal === 'string') {
-                    return currentSort.asc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
-                }
-                return currentSort.asc ? aVal - bVal : bVal - aVal;
-            });
-            
-            renderTable(sorted);
-        }
-        
-        function formatWinRate(wr) {
-            if (wr === null || wr === undefined) return '-';
-            const pct = (wr * 100).toFixed(1);
-            let cls = 'wr-neutral';
-            if (wr > 0.52) cls = 'wr-positive';
-            else if (wr < 0.48) cls = 'wr-negative';
-            return `<span class="${cls}">${pct}%</span>`;
-        }
-        
-        function formatPriority(priority, maxPriority) {
-            const pct = Math.min(Math.abs(priority) / maxPriority * 100, 100);
-            const cls = priority >= 0 ? 'positive' : 'negative';
-            return `
-                <div class="bar-cell">
-                    <span>${priority.toFixed(1)}</span>
-                    <div class="bar">
-                        <div class="bar-fill ${cls}" style="width: ${pct}%"></div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        function formatPlayed(playedGames, maxPlayed) {
-            const pct = maxPlayed > 0 ? Math.min(playedGames / maxPlayed * 100, 100) : 0;
-            return `
-                <div class="bar-cell">
-                    <span>${playedGames.toLocaleString()}</span>
-                    <div class="bar">
-                        <div class="bar-fill played" style="width: ${pct}%"></div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        function formatPlayers(uniquePlayers, maxPlayers) {
-            const pct = maxPlayers > 0 ? Math.min(uniquePlayers / maxPlayers * 100, 100) : 0;
-            return `
-                <div class="bar-cell">
-                    <span>${uniquePlayers.toLocaleString()}</span>
-                    <div class="bar">
-                        <div class="bar-fill players" style="width: ${pct}%"></div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        function formatCardName(card) {
-            const name = card.cardName || card.blueprint;
-            const bp = `<span class="blueprint">${card.blueprint}</span>`;
-            return `<span class="card-name" data-image="${card.image || ''}">${name}  ${bp}</span>`;
-        }
-        
-        function formatCulture(culture, name) {
-            let filename = "";
-            if (!culture) {
-                if(name.includes("The One Ring")) {
-                    culture = "The One Ring";
-                    filename = "ring";
-                }
-                else {
-                    culture = "Site";
-                    filename = "site";
-                }
-            }
-            else {
-                // Convert culture name to lowercase for SVG filename
-                filename = culture.toLowerCase().replace(/\s+/g, '');
-                filename = filename.replace(/\bwraith/g, 'ringwraith');
-            }
-
-            return `<img src="/gemp-web/images/cultures/${filename}.svg" alt="${culture}" title="${culture}" class="culture-icon" onerror="this.outerHTML='${culture}'">`;
-        }
-        
-        function formatSide(side) {
-            if (side === 'free_peoples') return '<span class="side-fp">Free Peoples</span>';
-            if (side === 'shadow') return '<span class="side-shadow">Shadow</span>';
-            return 'None';
-        }
-        
-        function renderTable(data) {
-            const tbody = document.getElementById('statsBody');
-            
-            if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="loading">No data found</td></tr>';
-                return;
-            }
-            
-            const maxPriority = Math.max(...data.map(d => Math.abs(d.priority)));
-            const maxPlayed = Math.max(...data.map(d => d.played_games));
-            const maxPlayers = Math.max(...data.map(d => d.unique_players || 0));
-            
-            tbody.innerHTML = data.map(card => `
-                <tr>
-                    <td class="card-cell" data-image="${card.image || ''}">${formatCardName(card)}</td>
-                    <td>${formatSide(card.side)}</td>
-                    <td class="culture">${formatCulture(card.culture, card.cardName)}</td>
-                    <td>${card.games.toLocaleString()}</td>
-                    <td>${formatWinRate(card.inclusion_wr)}</td>
-                    <td>${formatPlayers(card.unique_players || 0, maxPlayers)}</td>
-                    <td>${formatPlayed(card.played_games, maxPlayed)}</td>
-                    <td>${formatWinRate(card.played_wr)}</td>
-                    <td>${formatPriority(card.priority, maxPriority)}</td>
-                </tr>
-            `).join('');
-            
-            // Add hover handlers for card images
-            setupCardHover();
-        }
-        
-        function setupCardHover() {
-            const popup = document.getElementById('cardPopup');
-            const img = document.getElementById('cardImage');
-            
-            document.querySelectorAll('.card-cell').forEach(el => {
-                el.addEventListener('mouseenter', (e) => {
-                    const imageUrl = el.dataset.image;
-                    if (imageUrl) {
-                        img.src = imageUrl;
-                        popup.style.display = 'block';
-                    }
-                });
-                
-                el.addEventListener('mousemove', (e) => {
-                    const popup = document.getElementById('cardPopup');
-                    const offset = 15;
-                    const size = 600;
-                    // Default to left of cursor
-                    let left = e.clientX - size - offset;
-                    let top = e.clientY + offset;
-                    
-                    // If would go off left edge, flip to right
-                    if (left < 0) {
-                        left = e.clientX + offset;
-                    }
-                    if (top + size > window.innerHeight) {
-                        top = window.innerHeight - size;
-                    }
-                    
-                    popup.style.left = left + 'px';
-                    popup.style.top = top + 'px';
-                });
-                
-                el.addEventListener('mouseleave', () => {
-                    popup.style.display = 'none';
-                });
-            });
-        }
-        
-        // Search functionality
-        let searchMatches = [];
-        let currentMatchIndex = -1;
-
-        function normalizeForSearch(str) {
-            return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        }
-        
-        function handleSearchKeyup(event) {
-            if (event.key === 'Enter') {
-                if (event.shiftKey) {
-                    searchPrev();
-                } else {
-                    searchNext();
-                }
-            } else {
-                performSearch();
-            }
-        }
-        
-        function performSearch() {
-            const query = normalizeForSearch(document.getElementById('cardSearch').value.trim());
-            const rows = document.querySelectorAll('#statsBody tr');
-            
-            // Clear previous highlights
-            rows.forEach(row => row.classList.remove('highlight-row'));
-            searchMatches = [];
-            currentMatchIndex = -1;
-            
-            if (!query) {
-                document.getElementById('searchCount').textContent = '';
-                return;
-            }
-            
-            // Find matching rows
-            rows.forEach((row, index) => {
-                const cardCell = row.querySelector('.card-cell');
-                if (cardCell && normalizeForSearch(cardCell.textContent).includes(query)) {
-                    searchMatches.push(row);
-                }
-            });
-            
-            // Update count display
-            const countEl = document.getElementById('searchCount');
-            if (searchMatches.length > 0) {
-                countEl.textContent = `${searchMatches.length} found`;
-                // Auto-jump to first match
-                currentMatchIndex = 0;
-                highlightAndScroll();
-            } else {
-                countEl.textContent = 'No matches';
-            }
-        }
-        
-        function highlightAndScroll() {
-            // Clear all highlights
-            document.querySelectorAll('#statsBody tr').forEach(row => {
-                row.classList.remove('highlight-row');
-            });
-            
-            if (searchMatches.length === 0 || currentMatchIndex < 0) return;
-            
-            const row = searchMatches[currentMatchIndex];
-            row.classList.add('highlight-row');
-            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            
-            // Update count display
-            document.getElementById('searchCount').textContent = 
-                `${currentMatchIndex + 1} / ${searchMatches.length}`;
-        }
-        
-        function searchNext() {
-            if (searchMatches.length === 0) return;
-            currentMatchIndex = (currentMatchIndex + 1) % searchMatches.length;
-            highlightAndScroll();
-        }
-        
-        function searchPrev() {
-            if (searchMatches.length === 0) return;
-            currentMatchIndex = (currentMatchIndex - 1 + searchMatches.length) % searchMatches.length;
-            highlightAndScroll();
-        }
-        
-        function scrollToTop() {
-            const container = document.querySelector('.table-container');
-            container.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-        
-        function scrollToBottom() {
-            const container = document.querySelector('.table-container');
-            container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
-        }
-    </script>
+    <footer>
+        <p>GEMP Card Analytics • Data updates daily • <a href="/docs">API Documentation</a></p>
+    </footer>
 </body>
 </html>

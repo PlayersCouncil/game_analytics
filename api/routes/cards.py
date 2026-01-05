@@ -71,12 +71,45 @@ def get_card_stats(
         limit=limit,
     )
     
+    # Query total games for this format/filters
+    total_games_sql = """
+        SELECT COUNT(DISTINCT ga.game_id)
+        FROM game_analysis ga
+        WHERE ga.format_name = %s
+    """
+    total_games_params = [format]
+    
+    if patch_date:
+        total_games_sql += " AND DATE(ga.analyzed_at) >= %s"
+        total_games_params.append(patch_date)
+    elif start:
+        total_games_sql += " AND DATE(ga.analyzed_at) >= %s"
+        total_games_params.append(start)
+    
+    if end:
+        total_games_sql += " AND DATE(ga.analyzed_at) <= %s"
+        total_games_params.append(end)
+    
+    if outcome_tiers:
+        placeholders = ','.join(['%s'] * len(outcome_tiers))
+        total_games_sql += f" AND ga.outcome_tier IN ({placeholders})"
+        total_games_params.extend(outcome_tiers)
+    
+    if competitive_tiers:
+        placeholders = ','.join(['%s'] * len(competitive_tiers))
+        total_games_sql += f" AND ga.competitive_tier IN ({placeholders})"
+        total_games_params.extend(competitive_tiers)
+    
+    cursor.execute(total_games_sql, total_games_params)
+    total_games = cursor.fetchone()[0] or 0
+    
     return CardStatsResponse(
         format=format,
         date_range=DateRange(start=patch_date or start, end=end),
         outcome_tiers=outcome_tiers,
         competitive_tiers=competitive_tiers,
         total_cards=len(cards),
+        total_games=total_games,
         cards=cards,
     )
 
