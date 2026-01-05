@@ -144,7 +144,35 @@ def root():
     return {"message": "GEMP Analytics API", "docs": "/docs"}
 
 
-# Admin page
+# HTML page routes
+@app.get("/query.html")
+def query_page():
+    """Serve the query tool page."""
+    path = static_dir / "query.html"
+    if path.exists():
+        return FileResponse(path)
+    return {"message": "Page not found"}
+
+
+@app.get("/archetypes.html")
+def archetypes_page():
+    """Serve the archetypes explorer page."""
+    path = static_dir / "archetypes.html"
+    if path.exists():
+        return FileResponse(path)
+    return {"message": "Page not found"}
+
+
+@app.get("/admin.html")
+def admin_html_page():
+    """Serve the admin page (with .html extension)."""
+    admin_path = static_dir / "admin.html"
+    if admin_path.exists():
+        return FileResponse(admin_path)
+    return {"message": "Admin page not found"}
+
+
+# Admin page (legacy route without .html)
 @app.get("/admin")
 def admin_page():
     """Serve the admin page."""

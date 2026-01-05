@@ -237,27 +237,20 @@
                 <dd>Number of games where this card appeared in at least one player's deck.</dd>
                 
                 <dt>Inclusion WR</dt>
-                <dd>Win rate when the card is in your deck, whether played or not.</dd>
+                <dd>Win rate when the card is in your deck, whether played or not.  This is often a statement about that deck rather than that card.</dd>
                 
                 <dt>Players</dt>
                 <dd>Unique players who included this card (helps identify "pet decks" vs meta trends).</dd>
                 
                 <dt>Played</dt>
-                <dd>Number of times this card was actually played from hand (not just sitting in deck).</dd>
+                <dd>Number of times this card was actually played (not just sitting in deck).</dd>
                 
                 <dt>Play WR</dt>
-                <dd>Win rate specifically when this card was played. Most meaningful for events/conditions.</dd>
+                <dd>Win rate specifically when this card was played.</dd>
                 
                 <dt>Priority</dt>
-                <dd>Games × (WinRate - 0.5). Combines popularity with impact—high priority cards are both common and influential.</dd>
+                <dd>Games × (WinRate - 0.5). Combines popularity with impact. High priority cards are both common and influential. Low priority cards lose a lot proportional to their inclusion.</dd>
             </dl>
-            
-            <h3>Win Rate Color Coding</h3>
-            <p>
-                <span class="color-sample color-green"></span><strong>Green (47-53%):</strong> Balanced—close to the expected 50% baseline.<br>
-                <span class="color-sample color-yellow"></span><strong>Yellow (40-46% or 54-60%):</strong> Slightly skewed—worth watching.<br>
-                <span class="color-sample color-red"></span><strong>Red (&lt;40% or &gt;60%):</strong> Significantly imbalanced—may indicate design issues.
-            </p>
         </div>
         
         <div class="card">
@@ -266,24 +259,18 @@
             <div class="warning-box">
                 <strong>⚠️ Attached Zone Bug</strong>
                 <p style="margin-top: 8px; margin-bottom: 0;">
-                    Cards that remain attached at game end (weapons, armor, conditions on characters) are incorrectly 
-                    recorded as "not played" even though they were played earlier in the game. This primarily affects 
-                    <strong>Play WR</strong> for possessions and conditions—the Inclusion WR remains accurate.
+                    Before January 2026, cards which played into the ATTACHED zone (such as weapons or conditions like Last Alliance) were incorrectly tracked and so never registered as "played".  These cards will thus show as 0 played across the board.  If you see a very low play stat and it is an attachment, disregard the <strong>Play WR</strong> for that card.
+                    Events are still affected by this bug and never show as played; this will be fixed in the future.
                 </p>
             </div>
-            
-            <p>
-                This bug causes equipment-heavy strategies to appear less played than they actually are. 
-                We're working on a fix, but in the meantime, treat Play WR for attachments with skepticism 
-                and rely more on Inclusion WR for those card types.
-            </p>
+
             
             <h3>Other Considerations</h3>
             <ul>
                 <li><strong>Bot games are excluded</strong> — Games against AI opponents don't contribute to statistics.</li>
                 <li><strong>Sample size matters</strong> — Cards with fewer than 50-100 games may have unreliable statistics.</li>
                 <li><strong>Meta context</strong> — A card's win rate depends on what it's being played against. A "bad" card might just be poorly positioned in the current meta.</li>
-                <li><strong>Correlation ≠ Causation</strong> — High win rate doesn't mean the card is causing wins. Strong players might favor certain cards.</li>
+                <li><strong>Correlation ≠ Causation</strong> — High win rate doesn't mean the card is causing wins. Strong players might favor certain cards. See Pippin, Hobbit of Some Intelligence carrying a 60% win rate.</li>
             </ul>
         </div>
         
@@ -318,13 +305,13 @@
             </p>
             <p>
                 Questions or feedback? Visit the <a href="https://github.com/PlayersCouncil/gemp-lotr" target="_blank">GEMP GitHub</a> 
-                or join the community Discord.
+                or join the <a href="https://lotrtcgpc.net/discord">community Discord</a>.
             </p>
         </div>
     </div>
     
     <footer>
-        <p>GEMP Card Analytics • Data updates daily • <a href="/docs">API Documentation</a></p>
+        <p>GEMP Card Analytics • Data updates daily</p>
     </footer>
 </body>
 </html>
