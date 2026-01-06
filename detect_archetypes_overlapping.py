@@ -2,30 +2,30 @@
 """
 GEMP Overlapping Archetype Detection
 
-Uses DEMON (Democratic Estimate of the Modular Organization of a Network) to find
-overlapping card communities. Unlike Louvain, cards can belong to multiple archetypes.
-
-This better reflects CCG reality where:
+Uses overlapping community detection algorithms to find card clusters where
+cards can belong to multiple archetypes. This better reflects CCG reality where:
 - Splash cards appear in multiple strategies
 - Hybrid decks exist
 - Key cards anchor multiple archetypes
 
-Algorithm:
-1. Build graph: cards = nodes, correlations = edges (weighted by lift)
-2. Run DEMON to find overlapping communities
-3. For each community, compute stats and membership
-4. Store for human review (cards may appear in multiple communities)
+Available algorithms:
+- DEMON: Democratic Estimate of the Modular Organization of a Network
+- SLPA: Speaker-listener Label Propagation Algorithm
+- ANGEL: Similar to DEMON with different merging strategy
 
 Usage:
-    python detect_archetypes_overlapping.py                        # All formats
-    python detect_archetypes_overlapping.py --format "Fellowship Block"
-    python detect_archetypes_overlapping.py --epsilon 0.25         # Merge threshold
+    python detect_archetypes_overlapping.py                        # All formats with DEMON
+    python detect_archetypes_overlapping.py --algorithm slpa       # Use SLPA instead
+    python detect_archetypes_overlapping.py --max-degree 80        # Remove super-connectors
+    python detect_archetypes_overlapping.py --min-membership 0.3   # Filter peripheral cards
     python detect_archetypes_overlapping.py --dry-run              # Preview
 
-DEMON parameters:
-    --epsilon: Merge threshold (0-1). Higher = more merging = fewer communities.
-               Default 0.25 is a good starting point.
-    --min-community: Minimum community size. Default 3 (DEMON's default).
+Key parameters:
+    --algorithm: demon (default), slpa, or angel
+    --max-degree: Remove cards with more than N correlations (super-connectors)
+    --min-membership: Filter cards with low community membership score
+    --epsilon: Merge threshold for DEMON/ANGEL (0-1)
+    --iterations: Number of iterations for SLPA
 """
 
 import argparse
@@ -53,6 +53,9 @@ except ImportError:
 
 from config import Config
 
+# Available algorithms
+ALGORITHMS = ['demon', 'slpa', 'angel']
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -65,13 +68,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float, min_together: int) -> nx.Graph:
+def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float, min_together: int, max_degree: int = 0) -> nx.Graph:
     """
     Build a weighted graph from card correlations.
     
     Nodes = cards
     Edges = correlations with lift >= min_lift
     Edge weight = lift value
+    
+    If max_degree > 0, removes super-connector nodes after building.
     """
     cursor.execute("""
         SELECT card_a, card_b, lift, together_count
@@ -90,32 +95,46 @@ def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float
     logger.info(f"  Built graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
     
     # Log high-degree nodes (potential super-connectors that distort communities)
+    removed_connectors = []
     if G.number_of_nodes() > 0:
         degrees = sorted(G.degree(), key=lambda x: x[1], reverse=True)
         avg_degree = sum(d for _, d in degrees) / len(degrees)
         logger.info(f"  Average degree: {avg_degree:.1f}")
         
-        # Cards with degree > 3x average are suspicious
-        high_degree_threshold = avg_degree * 3
-        high_degree = [(n, d) for n, d in degrees if d > high_degree_threshold]
-        if high_degree:
-            logger.info(f"  High-degree nodes (>{high_degree_threshold:.0f} edges):")
-            for node, deg in high_degree[:5]:
-                logger.info(f"    {node}: {deg} edges")
+        # Remove super-connectors if max_degree specified
+        if max_degree > 0:
+            to_remove = [(n, d) for n, d in degrees if d > max_degree]
+            if to_remove:
+                removed_connectors = to_remove
+                logger.info(f"  Removing {len(to_remove)} super-connectors (degree > {max_degree}):")
+                for node, deg in to_remove[:10]:
+                    logger.info(f"    {node}: {deg} edges")
+                G.remove_nodes_from([n for n, _ in to_remove])
+                logger.info(f"  Graph after removal: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+        else:
+            # Just log high-degree nodes without removing
+            high_degree_threshold = avg_degree * 3
+            high_degree = [(n, d) for n, d in degrees if d > high_degree_threshold]
+            if high_degree:
+                logger.info(f"  High-degree nodes (>{high_degree_threshold:.0f} edges):")
+                for node, deg in high_degree[:5]:
+                    logger.info(f"    {node}: {deg} edges")
     
     return G
 
 
-def detect_communities_demon(G: nx.Graph, epsilon: float = 0.25, min_community: int = 3) -> list[set]:
+def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilon: float = 0.25, min_community: int = 3, iterations: int = 20) -> list[set]:
     """
-    Run DEMON community detection on the graph.
+    Run overlapping community detection on the graph.
     
     Returns: list of sets, each set contains card blueprints in that community.
     Cards can appear in multiple sets (overlapping).
     
     Parameters:
-        epsilon: Merge threshold (0-1). Higher = more aggressive merging.
+        algorithm: 'demon', 'slpa', or 'angel'
+        epsilon: Merge threshold for DEMON/ANGEL (0-1). Higher = more aggressive merging.
         min_community: Minimum community size to keep.
+        iterations: Number of iterations for SLPA (default 20).
     """
     if G.number_of_nodes() == 0:
         return []
@@ -128,8 +147,23 @@ def detect_communities_demon(G: nx.Graph, epsilon: float = 0.25, min_community: 
         logger.info(f"  Using largest connected component: {G.number_of_nodes()} nodes")
     
     try:
-        # Run DEMON
-        result: NodeClustering = cd_algorithms.demon(G, epsilon=epsilon, min_com_size=min_community)
+        # Run selected algorithm
+        if algorithm == 'demon':
+            logger.info(f"  Running DEMON (epsilon={epsilon}, min_com_size={min_community})")
+            result: NodeClustering = cd_algorithms.demon(G, epsilon=epsilon, min_com_size=min_community)
+        elif algorithm == 'slpa':
+            # SLPA: Speaker-listener Label Propagation
+            # t = iterations, r = threshold for label inclusion (lower = more overlap)
+            logger.info(f"  Running SLPA (iterations={iterations})")
+            result: NodeClustering = cd_algorithms.slpa(G, t=iterations, r=0.1)
+        elif algorithm == 'angel':
+            # ANGEL: similar to DEMON with different merging strategy
+            logger.info(f"  Running ANGEL (threshold={epsilon}, min_community={min_community})")
+            result: NodeClustering = cd_algorithms.angel(G, threshold=epsilon, min_community_size=min_community)
+        else:
+            logger.error(f"  Unknown algorithm: {algorithm}")
+            return []
+            
         communities = result.communities
         
         # Convert to list of sets
@@ -165,7 +199,9 @@ def detect_communities_demon(G: nx.Graph, epsilon: float = 0.25, min_community: 
         return community_sets
         
     except Exception as e:
-        logger.error(f"  DEMON failed: {e}")
+        logger.error(f"  {algorithm.upper()} failed: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return []
 
 
@@ -341,8 +377,14 @@ def main():
                         help='Minimum lift for correlation edges (default: 1.5)')
     parser.add_argument('--min-together', type=int, default=50,
                         help='Minimum co-occurrences for edges (default: 50)')
+    parser.add_argument('--max-degree', type=int, default=0,
+                        help='Remove super-connectors with more than N edges (default: 0 = disabled, try 80)')
+    parser.add_argument('--algorithm', type=str, default='demon', choices=ALGORITHMS,
+                        help='Overlapping algorithm: demon, slpa, angel (default: demon)')
     parser.add_argument('--epsilon', type=float, default=0.25,
-                        help='DEMON merge threshold 0-1: higher=fewer communities (default: 0.25)')
+                        help='DEMON/ANGEL merge threshold 0-1: higher=fewer communities (default: 0.25)')
+    parser.add_argument('--iterations', type=int, default=20,
+                        help='SLPA iterations (default: 20)')
     parser.add_argument('--min-community', type=int, default=3,
                         help='DEMON minimum community size (default: 3)')
     parser.add_argument('--min-cards', type=int, default=7,
@@ -379,7 +421,7 @@ def main():
         else:
             formats = get_available_formats(cursor)
         
-        logger.info(f"Processing {len(formats)} formats with DEMON (epsilon={args.epsilon}, min_membership={args.min_membership})")
+        logger.info(f"Processing {len(formats)} formats with {args.algorithm.upper()} (max_degree={args.max_degree}, min_membership={args.min_membership})")
         
         for format_name in formats:
             logger.info(f"\n=== Processing {format_name} ===")
@@ -391,18 +433,20 @@ def main():
                     # Build graph from correlations
                     G = build_correlation_graph(
                         cursor, format_name, side,
-                        args.min_lift, args.min_together
+                        args.min_lift, args.min_together, args.max_degree
                     )
                     
                     if G.number_of_nodes() < 10:
                         logger.info("  Too few cards for meaningful communities, skipping")
                         continue
                     
-                    # Detect overlapping communities with DEMON
-                    communities = detect_communities_demon(
+                    # Detect overlapping communities
+                    communities = detect_communities_overlapping(
                         G, 
+                        algorithm=args.algorithm,
                         epsilon=args.epsilon,
-                        min_community=args.min_community
+                        min_community=args.min_community,
+                        iterations=args.iterations
                     )
                     
                     if not communities:
