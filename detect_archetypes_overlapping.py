@@ -71,42 +71,85 @@ def detect_communities_anchor(
     num_anchors: int = 20,
     correlation_threshold: float = 2.0,
     min_community: int = 7,
+    anchor_similarity_threshold: float = 3.0,
 ) -> list[set]:
     """
     Anchor-based community detection.
     
-    1. Find most-played cards as anchors
-    2. For each anchor, find cards that correlate strongly with it
-    3. Cards can belong to multiple anchor communities
+    1. Find most-played cards as anchors (per culture)
+    2. Skip anchors that are too similar to already-selected anchors
+    3. For each anchor, find cards that correlate strongly with it
+    4. Cards can belong to multiple anchor communities
     
     This is domain-aware: communities are centered around popular cards,
     which tend to be deck-defining rather than peripheral.
+    
+    Parameters:
+        num_anchors: Number of anchors PER CULTURE (not total)
+        correlation_threshold: Min lift to include card in anchor community
+        min_community: Minimum cards for a valid community
+        anchor_similarity_threshold: Skip anchor if lift with existing anchor exceeds this
     """
-    # Get most-played cards for this format/side
+    # Get most-played cards for this format/side, grouped by culture
     cursor.execute("""
-        SELECT csd.card_blueprint, SUM(csd.deck_appearances) as total_games
+        SELECT csd.card_blueprint, cc.culture, SUM(csd.deck_appearances) as total_games
         FROM card_stats_daily csd
         JOIN card_catalog cc ON csd.card_blueprint = cc.blueprint
         WHERE csd.format_name = %s AND cc.side = %s
-        GROUP BY csd.card_blueprint
-        ORDER BY total_games DESC
-        LIMIT %s
-    """, (format_name, side, num_anchors * 2))  # Get extra in case some aren't in graph
+        GROUP BY csd.card_blueprint, cc.culture
+        ORDER BY cc.culture, total_games DESC
+    """, (format_name, side))
     
-    anchor_candidates = [(row[0], row[1]) for row in cursor.fetchall()]
+    # Group by culture
+    cards_by_culture = defaultdict(list)
+    for row in cursor.fetchall():
+        blueprint, culture, games = row
+        cards_by_culture[culture].append((blueprint, games))
     
-    # Filter to cards actually in our correlation graph
+    logger.info(f"  Found {len(cards_by_culture)} cultures")
+    for culture, cards in cards_by_culture.items():
+        logger.info(f"    {culture}: {len(cards)} cards")
+    
+    # Select top N anchors per culture, skipping similar ones
     graph_nodes = set(G.nodes())
-    anchors = [(bp, games) for bp, games in anchor_candidates if bp in graph_nodes][:num_anchors]
+    selected_anchors = []
     
-    logger.info(f"  Using {len(anchors)} anchors (most-played cards)")
-    for bp, games in anchors[:5]:
-        logger.info(f"    {bp}: {games} games")
+    for culture, candidates in cards_by_culture.items():
+        culture_anchors = []
+        
+        for blueprint, games in candidates:
+            # Must be in correlation graph
+            if blueprint not in graph_nodes:
+                continue
+            
+            # Check if too similar to already-selected anchor
+            too_similar = False
+            for existing_anchor, _, _ in selected_anchors + culture_anchors:
+                if G.has_edge(blueprint, existing_anchor):
+                    lift = G[blueprint][existing_anchor].get('weight', 0)
+                    if lift >= anchor_similarity_threshold:
+                        too_similar = True
+                        logger.debug(f"    Skipping {blueprint} - too similar to {existing_anchor} (lift={lift:.1f})")
+                        break
+            
+            if too_similar:
+                continue
+            
+            culture_anchors.append((blueprint, games, culture))
+            
+            if len(culture_anchors) >= num_anchors:
+                break
+        
+        selected_anchors.extend(culture_anchors)
+        logger.info(f"    {culture}: selected {len(culture_anchors)} anchors")
+    
+    logger.info(f"  Total anchors: {len(selected_anchors)}")
+    for bp, games, culture in selected_anchors[:10]:
+        logger.info(f"    {bp} ({culture}): {games} games")
     
     communities = []
-    used_cards = set()  # Track which cards have been assigned
     
-    for anchor_bp, anchor_games in anchors:
+    for anchor_bp, anchor_games, anchor_culture in selected_anchors:
         # Find all cards that correlate with this anchor above threshold
         community_cards = {anchor_bp}
         card_scores = {anchor_bp: float('inf')}  # Anchor has infinite "score"
@@ -123,21 +166,22 @@ def detect_communities_anchor(
                 'cards': community_cards,
                 'anchor': anchor_bp,
                 'anchor_games': anchor_games,
+                'anchor_culture': anchor_culture,
                 'scores': card_scores,
             })
-            used_cards.update(community_cards)
     
-    logger.info(f"  Found {len(communities)} anchor-based communities")
-    logger.info(f"  Cards assigned: {len(used_cards)}/{len(graph_nodes)}")
+    logger.info(f"  Created {len(communities)} anchor-based communities")
     
-    # Log overlap
+    # Log overlap stats
     card_appearances = defaultdict(int)
     for comm in communities:
         for card in comm['cards']:
             card_appearances[card] += 1
     
+    total_assigned = len(card_appearances)
     multi = sum(1 for c in card_appearances.values() if c > 1)
-    logger.info(f"  Cards in multiple communities: {multi}/{len(used_cards)}")
+    logger.info(f"  Cards assigned: {total_assigned}/{len(graph_nodes)}")
+    logger.info(f"  Cards in multiple communities: {multi}/{total_assigned}")
     
     return communities
 
@@ -416,7 +460,8 @@ def insert_communities(
             anchor_info = ""
             if 'anchor' in comm:
                 anchor_name = card_names.get(comm['anchor'], comm['anchor'])
-                anchor_info = f" [anchor: {anchor_name}, {comm.get('anchor_games', '?')} games]"
+                culture = comm.get('anchor_culture', '?')
+                anchor_info = f" [anchor: {anchor_name}, {culture}, {comm.get('anchor_games', '?')} games]"
             
             logger.info(f"\n  Community {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}{anchor_info}")
             # Show top 10 cards by membership score
@@ -494,9 +539,11 @@ def main():
     parser.add_argument('--min-cards', type=int, default=7,
                         help='Minimum cards to keep a community (default: 7)')
     parser.add_argument('--num-anchors', type=int, default=20,
-                        help='Number of anchor cards for anchor algorithm (default: 20)')
+                        help='Number of anchor cards PER CULTURE (default: 20)')
     parser.add_argument('--correlation-threshold', type=float, default=2.0,
                         help='Min lift to include card in anchor community (default: 2.0)')
+    parser.add_argument('--anchor-similarity', type=float, default=3.0,
+                        help='Skip anchor if lift with existing anchor exceeds this (default: 3.0)')
     parser.add_argument('--min-membership', type=float, default=0.0,
                         help='Minimum membership score to keep card in community (default: 0, try 0.3)')
     parser.add_argument('--dry-run', action='store_true',
@@ -555,7 +602,8 @@ def main():
                             cursor, G, format_name, side,
                             num_anchors=args.num_anchors,
                             correlation_threshold=args.correlation_threshold,
-                            min_community=args.min_cards
+                            min_community=args.min_cards,
+                            anchor_similarity_threshold=args.anchor_similarity
                         )
                         
                         if not anchor_communities:
@@ -576,6 +624,7 @@ def main():
                         for i, (stat, anchor_comm) in enumerate(zip(stats, anchor_communities)):
                             stat['anchor'] = anchor_comm['anchor']
                             stat['anchor_games'] = anchor_comm['anchor_games']
+                            stat['anchor_culture'] = anchor_comm.get('anchor_culture', '')
                     else:
                         # Graph-based algorithms (DEMON, SLPA, ANGEL)
                         communities = detect_communities_overlapping(
