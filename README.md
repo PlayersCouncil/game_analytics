@@ -52,6 +52,29 @@ python precompute.py --date 2024-01-15
 python precompute.py --rebuild      # Full rebuild of all stats
 ```
 
+### Archetype Detection
+
+Two algorithms are available for detecting card archetypes:
+
+**Louvain (non-overlapping)** - Each card belongs to exactly one archetype:
+```bash
+python detect_archetypes.py                           # All formats
+python detect_archetypes.py --format "Fellowship Block"
+python detect_archetypes.py --resolution 7.5          # More granular clusters
+python detect_archetypes.py --min-together 100        # Stricter co-occurrence
+python detect_archetypes.py --dry-run                 # Preview without saving
+```
+
+**DEMON (overlapping)** - Cards can belong to multiple archetypes:
+```bash
+python detect_archetypes_overlapping.py               # All formats
+python detect_archetypes_overlapping.py --format "Fellowship Block"
+python detect_archetypes_overlapping.py --epsilon 0.25  # Merge threshold
+python detect_archetypes_overlapping.py --dry-run     # Preview
+```
+
+Both require correlation data (run `compute_correlations.py` first).
+
 ### API Server
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000
