@@ -88,6 +88,21 @@ def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float
         G.add_edge(card_a, card_b, weight=lift, together=together)
     
     logger.info(f"  Built graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    
+    # Log high-degree nodes (potential super-connectors that distort communities)
+    if G.number_of_nodes() > 0:
+        degrees = sorted(G.degree(), key=lambda x: x[1], reverse=True)
+        avg_degree = sum(d for _, d in degrees) / len(degrees)
+        logger.info(f"  Average degree: {avg_degree:.1f}")
+        
+        # Cards with degree > 3x average are suspicious
+        high_degree_threshold = avg_degree * 3
+        high_degree = [(n, d) for n, d in degrees if d > high_degree_threshold]
+        if high_degree:
+            logger.info(f"  High-degree nodes (>{high_degree_threshold:.0f} edges):")
+            for node, deg in high_degree[:5]:
+                logger.info(f"    {node}: {deg} edges")
+    
     return G
 
 
@@ -139,6 +154,14 @@ def detect_communities_demon(G: nx.Graph, epsilon: float = 0.25, min_community: 
         multi_community_cards = sum(1 for c in card_appearances.values() if c > 1)
         logger.info(f"  Cards in multiple communities: {multi_community_cards}/{len(all_cards)}")
         
+        # Log super-connectors (cards in many communities)
+        super_connectors = [(card, count) for card, count in card_appearances.items() if count >= 5]
+        if super_connectors:
+            super_connectors.sort(key=lambda x: x[1], reverse=True)
+            logger.info(f"  Super-connectors (in 5+ communities):")
+            for card, count in super_connectors[:10]:
+                logger.info(f"    {card}: {count} communities")
+        
         return community_sets
         
     except Exception as e:
@@ -153,16 +176,40 @@ def compute_community_stats(
     format_name: str,
     side: str,
     min_cards: int = 7,
+    min_membership: float = 0.0,
 ) -> list[dict]:
     """
     Compute statistics for each community.
     
     Returns list of community info dicts.
+    
+    Parameters:
+        min_membership: Minimum membership score to keep a card in a community.
+                       Cards below this threshold are filtered out.
     """
     results = []
     
     for comm_id, cards in enumerate(communities):
         cards = list(cards)
+        
+        # First compute membership scores for all cards
+        membership_scores = {}
+        for card in cards:
+            # Count edges to other community members
+            internal_edges = sum(1 for neighbor in G.neighbors(card) if neighbor in cards)
+            max_possible = len(cards) - 1
+            membership_scores[card] = internal_edges / max_possible if max_possible > 0 else 0
+        
+        # Filter by minimum membership if specified
+        if min_membership > 0:
+            cards = [c for c in cards if membership_scores[c] >= min_membership]
+            # Recompute scores with filtered set
+            if len(cards) >= min_cards:
+                membership_scores = {}
+                for card in cards:
+                    internal_edges = sum(1 for neighbor in G.neighbors(card) if neighbor in cards)
+                    max_possible = len(cards) - 1
+                    membership_scores[card] = internal_edges / max_possible if max_possible > 0 else 0
         
         # Skip tiny communities (likely noise)
         if len(cards) < min_cards:
@@ -176,14 +223,6 @@ def compute_community_stats(
                     internal_lifts.append(G[card_a][card_b]['weight'])
         
         avg_lift = sum(internal_lifts) / len(internal_lifts) if internal_lifts else 0
-        
-        # Compute membership scores (how connected each card is within community)
-        membership_scores = {}
-        for card in cards:
-            # Count edges to other community members
-            internal_edges = sum(1 for neighbor in G.neighbors(card) if neighbor in cards)
-            max_possible = len(cards) - 1
-            membership_scores[card] = internal_edges / max_possible if max_possible > 0 else 0
         
         results.append({
             'community_id': comm_id,
@@ -308,6 +347,8 @@ def main():
                         help='DEMON minimum community size (default: 3)')
     parser.add_argument('--min-cards', type=int, default=7,
                         help='Minimum cards to keep a community (default: 7)')
+    parser.add_argument('--min-membership', type=float, default=0.0,
+                        help='Minimum membership score to keep card in community (default: 0, try 0.3)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Preview without inserting')
     parser.add_argument('--config', default='config.ini', help='Config file path')
@@ -338,7 +379,7 @@ def main():
         else:
             formats = get_available_formats(cursor)
         
-        logger.info(f"Processing {len(formats)} formats with DEMON (epsilon={args.epsilon})")
+        logger.info(f"Processing {len(formats)} formats with DEMON (epsilon={args.epsilon}, min_membership={args.min_membership})")
         
         for format_name in formats:
             logger.info(f"\n=== Processing {format_name} ===")
@@ -371,7 +412,8 @@ def main():
                     # Compute stats
                     stats = compute_community_stats(
                         G, communities, cursor, format_name, side,
-                        min_cards=args.min_cards
+                        min_cards=args.min_cards,
+                        min_membership=args.min_membership
                     )
                     
                     # Store

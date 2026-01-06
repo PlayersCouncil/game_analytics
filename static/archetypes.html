@@ -482,7 +482,6 @@
             const showInvalid = document.getElementById('showInvalid').checked;
             
             const listEl = document.getElementById('communityList');
-            listEl.innerHTML = '<div class="loading">Loading...</div>';
             
             try {
                 let url = `/api/communities?format_name=${encodeURIComponent(format)}`;
