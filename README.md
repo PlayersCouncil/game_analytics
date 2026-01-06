@@ -65,11 +65,13 @@ python detect_archetypes.py --min-together 100        # Stricter co-occurrence
 python detect_archetypes.py --dry-run                 # Preview without saving
 ```
 
-**DEMON (overlapping)** - Cards can belong to multiple archetypes:
+**DEMON/SLPA/ANGEL (overlapping)** - Cards can belong to multiple archetypes:
 ```bash
-python detect_archetypes_overlapping.py               # All formats
+python detect_archetypes_overlapping.py               # All formats with DEMON
 python detect_archetypes_overlapping.py --format "Fellowship Block"
-python detect_archetypes_overlapping.py --epsilon 0.25  # Merge threshold
+python detect_archetypes_overlapping.py --algorithm slpa    # Try SLPA instead
+python detect_archetypes_overlapping.py --max-degree 80     # Remove super-connectors
+python detect_archetypes_overlapping.py --min-membership 0.3  # Filter peripheral cards
 python detect_archetypes_overlapping.py --dry-run     # Preview
 ```
 

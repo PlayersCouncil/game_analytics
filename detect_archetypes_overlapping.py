@@ -10,22 +10,28 @@ cards can belong to multiple archetypes. This better reflects CCG reality where:
 
 Available algorithms:
 - DEMON: Democratic Estimate of the Modular Organization of a Network
-- SLPA: Speaker-listener Label Propagation Algorithm
+- SLPA: Speaker-listener Label Propagation Algorithm  
 - ANGEL: Similar to DEMON with different merging strategy
+- ANCHOR: Domain-aware - builds communities around most-played cards
 
 Usage:
-    python detect_archetypes_overlapping.py                        # All formats with DEMON
-    python detect_archetypes_overlapping.py --algorithm slpa       # Use SLPA instead
+    python detect_archetypes_overlapping.py                        # DEMON (default)
+    python detect_archetypes_overlapping.py --algorithm slpa       # Use SLPA
+    python detect_archetypes_overlapping.py --algorithm anchor     # Use anchor-based
     python detect_archetypes_overlapping.py --max-degree 80        # Remove super-connectors
-    python detect_archetypes_overlapping.py --min-membership 0.3   # Filter peripheral cards
+    python detect_archetypes_overlapping.py --seed 42              # Reproducible results
     python detect_archetypes_overlapping.py --dry-run              # Preview
 
+Anchor algorithm (recommended):
+    python detect_archetypes_overlapping.py --algorithm anchor \\
+        --num-anchors 25 --correlation-threshold 2.5 --dry-run
+
 Key parameters:
-    --algorithm: demon (default), slpa, or angel
+    --algorithm: demon, slpa, angel, or anchor
     --max-degree: Remove cards with more than N correlations (super-connectors)
-    --min-membership: Filter cards with low community membership score
-    --epsilon: Merge threshold for DEMON/ANGEL (0-1)
-    --iterations: Number of iterations for SLPA
+    --seed: Random seed for reproducibility
+    --num-anchors: How many top-played cards to use as anchors
+    --correlation-threshold: Min lift to include card in anchor's community
 """
 
 import argparse
@@ -54,7 +60,86 @@ except ImportError:
 from config import Config
 
 # Available algorithms
-ALGORITHMS = ['demon', 'slpa', 'angel']
+ALGORITHMS = ['demon', 'slpa', 'angel', 'anchor']
+
+
+def detect_communities_anchor(
+    cursor, 
+    G: nx.Graph, 
+    format_name: str, 
+    side: str, 
+    num_anchors: int = 20,
+    correlation_threshold: float = 2.0,
+    min_community: int = 7,
+) -> list[set]:
+    """
+    Anchor-based community detection.
+    
+    1. Find most-played cards as anchors
+    2. For each anchor, find cards that correlate strongly with it
+    3. Cards can belong to multiple anchor communities
+    
+    This is domain-aware: communities are centered around popular cards,
+    which tend to be deck-defining rather than peripheral.
+    """
+    # Get most-played cards for this format/side
+    cursor.execute("""
+        SELECT csd.card_blueprint, SUM(csd.deck_appearances) as total_games
+        FROM card_stats_daily csd
+        JOIN card_catalog cc ON csd.card_blueprint = cc.blueprint
+        WHERE csd.format_name = %s AND cc.side = %s
+        GROUP BY csd.card_blueprint
+        ORDER BY total_games DESC
+        LIMIT %s
+    """, (format_name, side, num_anchors * 2))  # Get extra in case some aren't in graph
+    
+    anchor_candidates = [(row[0], row[1]) for row in cursor.fetchall()]
+    
+    # Filter to cards actually in our correlation graph
+    graph_nodes = set(G.nodes())
+    anchors = [(bp, games) for bp, games in anchor_candidates if bp in graph_nodes][:num_anchors]
+    
+    logger.info(f"  Using {len(anchors)} anchors (most-played cards)")
+    for bp, games in anchors[:5]:
+        logger.info(f"    {bp}: {games} games")
+    
+    communities = []
+    used_cards = set()  # Track which cards have been assigned
+    
+    for anchor_bp, anchor_games in anchors:
+        # Find all cards that correlate with this anchor above threshold
+        community_cards = {anchor_bp}
+        card_scores = {anchor_bp: float('inf')}  # Anchor has infinite "score"
+        
+        for neighbor in G.neighbors(anchor_bp):
+            edge_data = G[anchor_bp][neighbor]
+            lift = edge_data.get('weight', 1.0)
+            if lift >= correlation_threshold:
+                community_cards.add(neighbor)
+                card_scores[neighbor] = lift
+        
+        if len(community_cards) >= min_community:
+            communities.append({
+                'cards': community_cards,
+                'anchor': anchor_bp,
+                'anchor_games': anchor_games,
+                'scores': card_scores,
+            })
+            used_cards.update(community_cards)
+    
+    logger.info(f"  Found {len(communities)} anchor-based communities")
+    logger.info(f"  Cards assigned: {len(used_cards)}/{len(graph_nodes)}")
+    
+    # Log overlap
+    card_appearances = defaultdict(int)
+    for comm in communities:
+        for card in comm['cards']:
+            card_appearances[card] += 1
+    
+    multi = sum(1 for c in card_appearances.values() if c > 1)
+    logger.info(f"  Cards in multiple communities: {multi}/{len(used_cards)}")
+    
+    return communities
 
 # Configure logging
 logging.basicConfig(
@@ -123,7 +208,7 @@ def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float
     return G
 
 
-def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilon: float = 0.25, min_community: int = 3, iterations: int = 20) -> list[set]:
+def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilon: float = 0.25, min_community: int = 3, iterations: int = 20, seed: int = None) -> list[set]:
     """
     Run overlapping community detection on the graph.
     
@@ -135,9 +220,18 @@ def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilo
         epsilon: Merge threshold for DEMON/ANGEL (0-1). Higher = more aggressive merging.
         min_community: Minimum community size to keep.
         iterations: Number of iterations for SLPA (default 20).
+        seed: Random seed for reproducibility.
     """
     if G.number_of_nodes() == 0:
         return []
+    
+    # Set random seed for reproducibility
+    if seed is not None:
+        import random
+        import numpy as np
+        random.seed(seed)
+        np.random.seed(seed)
+        logger.info(f"  Using random seed: {seed}")
     
     # DEMON requires the graph to be connected for best results
     # Work on largest connected component if graph is disconnected
@@ -318,7 +412,13 @@ def insert_communities(
                 card_communities[card].append(comm['community_id'])
         
         for comm in community_stats[:15]:
-            logger.info(f"\n  Community {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}")
+            # Show anchor info if available
+            anchor_info = ""
+            if 'anchor' in comm:
+                anchor_name = card_names.get(comm['anchor'], comm['anchor'])
+                anchor_info = f" [anchor: {anchor_name}, {comm.get('anchor_games', '?')} games]"
+            
+            logger.info(f"\n  Community {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}{anchor_info}")
             # Show top 10 cards by membership score
             top_cards = sorted(comm['membership_scores'].items(), key=lambda x: x[1], reverse=True)[:10]
             for card, score in top_cards:
@@ -387,10 +487,16 @@ def main():
                         help='Threshold: DEMON/ANGEL merge (higher=fewer), SLPA label inclusion (lower=more) (default: 0.25)')
     parser.add_argument('--iterations', type=int, default=20,
                         help='SLPA iterations (default: 20)')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed for reproducibility (default: None = random)')
     parser.add_argument('--min-community', type=int, default=3,
                         help='DEMON minimum community size (default: 3)')
     parser.add_argument('--min-cards', type=int, default=7,
                         help='Minimum cards to keep a community (default: 7)')
+    parser.add_argument('--num-anchors', type=int, default=20,
+                        help='Number of anchor cards for anchor algorithm (default: 20)')
+    parser.add_argument('--correlation-threshold', type=float, default=2.0,
+                        help='Min lift to include card in anchor community (default: 2.0)')
     parser.add_argument('--min-membership', type=float, default=0.0,
                         help='Minimum membership score to keep card in community (default: 0, try 0.3)')
     parser.add_argument('--dry-run', action='store_true',
@@ -442,25 +548,55 @@ def main():
                         logger.info("  Too few cards for meaningful communities, skipping")
                         continue
                     
-                    # Detect overlapping communities
-                    communities = detect_communities_overlapping(
-                        G, 
-                        algorithm=args.algorithm,
-                        epsilon=args.epsilon,
-                        min_community=args.min_community,
-                        iterations=args.iterations
-                    )
-                    
-                    if not communities:
-                        logger.info("  No communities detected")
-                        continue
-                    
-                    # Compute stats
-                    stats = compute_community_stats(
-                        G, communities, cursor, format_name, side,
-                        min_cards=args.min_cards,
-                        min_membership=args.min_membership
-                    )
+                    # Detect communities based on algorithm
+                    if args.algorithm == 'anchor':
+                        # Anchor-based detection (returns different structure)
+                        anchor_communities = detect_communities_anchor(
+                            cursor, G, format_name, side,
+                            num_anchors=args.num_anchors,
+                            correlation_threshold=args.correlation_threshold,
+                            min_community=args.min_cards
+                        )
+                        
+                        if not anchor_communities:
+                            logger.info("  No communities detected")
+                            continue
+                        
+                        # Convert anchor format to standard format for stats/storage
+                        communities = [set(c['cards']) for c in anchor_communities]
+                        
+                        # Compute stats (will recalculate membership scores)
+                        stats = compute_community_stats(
+                            G, communities, cursor, format_name, side,
+                            min_cards=args.min_cards,
+                            min_membership=args.min_membership
+                        )
+                        
+                        # Inject anchor info into stats
+                        for i, (stat, anchor_comm) in enumerate(zip(stats, anchor_communities)):
+                            stat['anchor'] = anchor_comm['anchor']
+                            stat['anchor_games'] = anchor_comm['anchor_games']
+                    else:
+                        # Graph-based algorithms (DEMON, SLPA, ANGEL)
+                        communities = detect_communities_overlapping(
+                            G, 
+                            algorithm=args.algorithm,
+                            epsilon=args.epsilon,
+                            min_community=args.min_community,
+                            iterations=args.iterations,
+                            seed=args.seed
+                        )
+                        
+                        if not communities:
+                            logger.info("  No communities detected")
+                            continue
+                        
+                        # Compute stats
+                        stats = compute_community_stats(
+                            G, communities, cursor, format_name, side,
+                            min_cards=args.min_cards,
+                            min_membership=args.min_membership
+                        )
                     
                     # Store
                     insert_communities(cursor, conn, format_name, side, stats, args.dry_run)
