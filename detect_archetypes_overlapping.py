@@ -153,9 +153,11 @@ def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilo
             result: NodeClustering = cd_algorithms.demon(G, epsilon=epsilon, min_com_size=min_community)
         elif algorithm == 'slpa':
             # SLPA: Speaker-listener Label Propagation
-            # t = iterations, r = threshold for label inclusion (lower = more overlap)
-            logger.info(f"  Running SLPA (iterations={iterations})")
-            result: NodeClustering = cd_algorithms.slpa(G, t=iterations, r=0.1)
+            # t = iterations, r = threshold for label inclusion
+            # Lower r = more labels kept = more communities/overlap
+            # Higher r = fewer labels = fewer communities
+            logger.info(f"  Running SLPA (iterations={iterations}, threshold={epsilon})")
+            result: NodeClustering = cd_algorithms.slpa(G, t=iterations, r=epsilon)
         elif algorithm == 'angel':
             # ANGEL: similar to DEMON with different merging strategy
             logger.info(f"  Running ANGEL (threshold={epsilon}, min_community={min_community})")
@@ -382,7 +384,7 @@ def main():
     parser.add_argument('--algorithm', type=str, default='demon', choices=ALGORITHMS,
                         help='Overlapping algorithm: demon, slpa, angel (default: demon)')
     parser.add_argument('--epsilon', type=float, default=0.25,
-                        help='DEMON/ANGEL merge threshold 0-1: higher=fewer communities (default: 0.25)')
+                        help='Threshold: DEMON/ANGEL merge (higher=fewer), SLPA label inclusion (lower=more) (default: 0.25)')
     parser.add_argument('--iterations', type=int, default=20,
                         help='SLPA iterations (default: 20)')
     parser.add_argument('--min-community', type=int, default=3,
