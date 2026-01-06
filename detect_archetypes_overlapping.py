@@ -13,24 +13,35 @@ Available algorithms:
 - SLPA: Speaker-listener Label Propagation Algorithm  
 - ANGEL: Similar to DEMON with different merging strategy
 - ANCHOR: Domain-aware - builds communities around most-played cards
+- KCLIQUE: K-Clique Percolation - finds tightly connected clique structures
 
 Usage:
     python detect_archetypes_overlapping.py                        # DEMON (default)
     python detect_archetypes_overlapping.py --algorithm slpa       # Use SLPA
     python detect_archetypes_overlapping.py --algorithm anchor     # Use anchor-based
+    python detect_archetypes_overlapping.py --algorithm kclique    # Use k-clique percolation
     python detect_archetypes_overlapping.py --max-degree 80        # Remove super-connectors
     python detect_archetypes_overlapping.py --seed 42              # Reproducible results
     python detect_archetypes_overlapping.py --dry-run              # Preview
 
-Anchor algorithm (recommended):
+K-Clique algorithm:
+    python detect_archetypes_overlapping.py --algorithm kclique \\
+        --kclique-k 4 --dry-run
+    
+    k=3: Looser communities (triangles)
+    k=4: Default, balanced
+    k=5: Tighter communities, may miss smaller archetypes
+
+Anchor algorithm (domain-aware):
     python detect_archetypes_overlapping.py --algorithm anchor \\
-        --num-anchors 25 --correlation-threshold 2.5 --dry-run
+        --num-anchors 5 --correlation-threshold 2.5 --dry-run
 
 Key parameters:
-    --algorithm: demon, slpa, angel, or anchor
+    --algorithm: demon, slpa, angel, anchor, or kclique
     --max-degree: Remove cards with more than N correlations (super-connectors)
     --seed: Random seed for reproducibility
-    --num-anchors: How many top-played cards to use as anchors
+    --kclique-k: Clique size for kclique (3-5, default 4)
+    --num-anchors: How many top-played cards to use as anchors (per culture)
     --correlation-threshold: Min lift to include card in anchor's community
 """
 
@@ -60,7 +71,7 @@ except ImportError:
 from config import Config
 
 # Available algorithms
-ALGORITHMS = ['demon', 'slpa', 'angel', 'anchor']
+ALGORITHMS = ['demon', 'slpa', 'angel', 'anchor', 'kclique']
 
 
 def detect_communities_anchor(
@@ -279,7 +290,7 @@ def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float
     return G
 
 
-def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilon: float = 0.25, min_community: int = 3, iterations: int = 20, seed: int = None) -> list[set]:
+def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilon: float = 0.25, min_community: int = 3, iterations: int = 20, seed: int = None, kclique_k: int = 4) -> list[set]:
     """
     Run overlapping community detection on the graph.
     
@@ -287,11 +298,12 @@ def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilo
     Cards can appear in multiple sets (overlapping).
     
     Parameters:
-        algorithm: 'demon', 'slpa', or 'angel'
+        algorithm: 'demon', 'slpa', 'angel', or 'kclique'
         epsilon: Merge threshold for DEMON/ANGEL (0-1). Higher = more aggressive merging.
         min_community: Minimum community size to keep.
         iterations: Number of iterations for SLPA (default 20).
         seed: Random seed for reproducibility.
+        kclique_k: Clique size for kclique algorithm (default 4).
     """
     if G.number_of_nodes() == 0:
         return []
@@ -327,6 +339,11 @@ def detect_communities_overlapping(G: nx.Graph, algorithm: str = 'demon', epsilo
             # ANGEL: similar to DEMON with different merging strategy
             logger.info(f"  Running ANGEL (threshold={epsilon}, min_community={min_community})")
             result: NodeClustering = cd_algorithms.angel(G, threshold=epsilon, min_community_size=min_community)
+        elif algorithm == 'kclique':
+            # K-Clique Percolation: finds overlapping communities based on adjacent cliques
+            # k = clique size. Higher k = tighter clusters, fewer communities
+            logger.info(f"  Running K-Clique Percolation (k={kclique_k})")
+            result: NodeClustering = cd_algorithms.kclique(G, k=kclique_k)
         else:
             logger.error(f"  Unknown algorithm: {algorithm}")
             return []
@@ -559,6 +576,8 @@ def main():
                         help='Threshold: DEMON/ANGEL merge (higher=fewer), SLPA label inclusion (lower=more) (default: 0.25)')
     parser.add_argument('--iterations', type=int, default=20,
                         help='SLPA iterations (default: 20)')
+    parser.add_argument('--kclique-k', type=int, default=4,
+                        help='Clique size for kclique algorithm (default: 4, try 3-5)')
     parser.add_argument('--seed', type=int, default=None,
                         help='Random seed for reproducibility (default: None = random)')
     parser.add_argument('--min-community', type=int, default=3,
@@ -656,14 +675,15 @@ def main():
                             stat['anchor_games'] = anchor_comm['anchor_games']
                             stat['anchor_culture'] = anchor_comm.get('anchor_culture', '')
                     else:
-                        # Graph-based algorithms (DEMON, SLPA, ANGEL)
+                        # Graph-based algorithms (DEMON, SLPA, ANGEL, KCLIQUE)
                         communities = detect_communities_overlapping(
                             G, 
                             algorithm=args.algorithm,
                             epsilon=args.epsilon,
                             min_community=args.min_community,
                             iterations=args.iterations,
-                            seed=args.seed
+                            seed=args.seed,
+                            kclique_k=args.kclique_k
                         )
                         
                         if not communities:
