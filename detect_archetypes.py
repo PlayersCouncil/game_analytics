@@ -9,12 +9,22 @@ Algorithm:
 1. Build graph: cards = nodes, correlations = edges (weighted by lift)
 2. Run Louvain community detection to find natural clusters
 3. For each community, identify core cards and compute stats
-4. Store for human review
+4. Find "flex" cards - cards that correlate with multiple core members but were
+   assigned to a different community by Louvain
+5. Store for human review
+
+Card membership types:
+- 'core': Cards assigned to this community by Louvain
+- 'flex': Cards that correlate strongly with core members but belong elsewhere
+- 'custom': Cards manually assigned by users (preserved across runs)
 
 Usage:
     python detect_archetypes.py                           # All formats
     python detect_archetypes.py --format "Fellowship Block"
     python detect_archetypes.py --min-lift 1.5            # Stricter edge threshold
+    python detect_archetypes.py --resolution 7.5          # More granular communities
+    python detect_archetypes.py --flex-min-connections 4  # Stricter flex detection
+    python detect_archetypes.py --no-flex                 # Skip flex detection
     python detect_archetypes.py --dry-run                 # Preview without inserting
 """
 
@@ -184,8 +194,8 @@ def insert_communities(
     side: str,
     community_stats: list[dict],
     dry_run: bool = False,
-):
-    """Insert detected communities into database."""
+) -> list[int]:
+    """Insert detected communities into database. Returns list of db community IDs."""
     
     if dry_run:
         # Just preview
@@ -204,14 +214,26 @@ def insert_communities(
             for card, score in top_cards:
                 name = card_names.get(card, card)
                 logger.info(f"    {card} ({name}): score={score:.2f}")
-        return
+        return []
     
-    # Clear existing communities for this format/side
+    # Clear existing communities for this format/side (only core/flex, preserve custom)
+    cursor.execute("""
+        DELETE ccm FROM card_community_members ccm
+        JOIN card_communities cc ON ccm.community_id = cc.id
+        WHERE cc.format_name = %s AND cc.side = %s AND ccm.membership_type IN ('core', 'flex')
+    """, (format_name, side))
+    
     cursor.execute("""
         DELETE cc FROM card_communities cc
         WHERE cc.format_name = %s AND cc.side = %s
+          AND NOT EXISTS (
+              SELECT 1 FROM card_community_members ccm 
+              WHERE ccm.community_id = cc.id
+          )
     """, (format_name, side))
     conn.commit()
+    
+    db_community_ids = []
     
     # Insert each community
     for comm in community_stats:
@@ -223,21 +245,141 @@ def insert_communities(
         """, (format_name, side, comm['community_id'], comm['card_count'], comm['avg_internal_lift']))
         
         db_community_id = cursor.lastrowid
+        db_community_ids.append(db_community_id)
         
-        # Insert members
+        # Insert members as 'core' type
         member_data = [
-            (db_community_id, card, score, score >= 0.5)  # is_core if score >= 0.5
+            (db_community_id, card, score, score >= 0.5, 'core')
             for card, score in comm['membership_scores'].items()
         ]
         
         cursor.executemany("""
             INSERT INTO card_community_members 
-                (community_id, card_blueprint, membership_score, is_core)
-            VALUES (%s, %s, %s, %s)
+                (community_id, card_blueprint, membership_score, is_core, membership_type)
+            VALUES (%s, %s, %s, %s, %s)
         """, member_data)
     
     conn.commit()
     logger.info(f"  Inserted {len(community_stats)} communities for {format_name} {side}")
+    return db_community_ids
+
+
+def find_flex_cards(
+    G: nx.Graph,
+    community_stats: list[dict],
+    communities: dict[str, int],
+    min_core_connections: int = 3,
+    min_avg_lift: float = 2.0,
+) -> dict[int, list[tuple[str, float, int]]]:
+    """
+    Find flex cards - cards that correlate with multiple core members of communities
+    they weren't assigned to by Louvain.
+    
+    Parameters:
+        G: Correlation graph
+        community_stats: List of community stat dicts (with 'cards', 'membership_scores')
+        communities: Card -> community_id mapping from Louvain
+        min_core_connections: Minimum core cards a flex card must connect to
+        min_avg_lift: Minimum average lift to those core cards
+    
+    Returns:
+        {community_id: [(card_blueprint, avg_lift, num_connections), ...]}
+    """
+    flex_by_community = defaultdict(list)
+    
+    for comm in community_stats:
+        comm_id = comm['community_id']
+        
+        # Get core cards (membership_score >= 0.5)
+        core_cards = {card for card, score in comm['membership_scores'].items() if score >= 0.5}
+        
+        if len(core_cards) < min_core_connections:
+            continue  # Not enough core cards to meaningfully detect flex
+        
+        # Get all cards already in this community
+        comm_cards = set(comm['cards'])
+        
+        # Find candidates: cards NOT in this community but in the graph
+        all_graph_nodes = set(G.nodes())
+        candidates = all_graph_nodes - comm_cards
+        
+        for candidate in candidates:
+            # Count connections to core cards and compute average lift
+            connections = []
+            for core_card in core_cards:
+                if G.has_edge(candidate, core_card):
+                    lift = G[candidate][core_card].get('weight', 0)
+                    connections.append(lift)
+            
+            if len(connections) >= min_core_connections:
+                avg_lift = sum(connections) / len(connections)
+                if avg_lift >= min_avg_lift:
+                    flex_by_community[comm_id].append((candidate, avg_lift, len(connections)))
+    
+    # Sort by avg_lift descending within each community
+    for comm_id in flex_by_community:
+        flex_by_community[comm_id].sort(key=lambda x: x[1], reverse=True)
+    
+    return flex_by_community
+
+
+def insert_flex_cards(
+    cursor,
+    conn,
+    db_community_ids: list[int],
+    community_stats: list[dict],
+    flex_by_community: dict[int, list[tuple[str, float, int]]],
+    dry_run: bool = False,
+):
+    """Insert flex cards into communities."""
+    
+    total_flex = sum(len(cards) for cards in flex_by_community.values())
+    
+    if dry_run:
+        logger.info(f"\n  DRY RUN: Would add {total_flex} flex cards across {len(flex_by_community)} communities")
+        
+        # Get card names for preview
+        all_flex_cards = [card for cards in flex_by_community.values() for card, _, _ in cards]
+        card_names = get_card_names(cursor, all_flex_cards[:50])  # Limit for preview
+        
+        for comm in community_stats:
+            comm_id = comm['community_id']
+            if comm_id in flex_by_community:
+                flex_cards = flex_by_community[comm_id][:5]  # Show top 5
+                if flex_cards:
+                    logger.info(f"\n  Community {comm_id} flex cards:")
+                    for card, avg_lift, num_conn in flex_cards:
+                        name = card_names.get(card, card)
+                        logger.info(f"    + {card} ({name}): avg_lift={avg_lift:.2f}, connections={num_conn}")
+        return
+    
+    # Map community_id to db_community_id
+    comm_id_to_db_id = {
+        comm['community_id']: db_id 
+        for comm, db_id in zip(community_stats, db_community_ids)
+    }
+    
+    flex_data = []
+    for comm_id, flex_cards in flex_by_community.items():
+        db_id = comm_id_to_db_id.get(comm_id)
+        if db_id is None:
+            continue
+        
+        for card, avg_lift, num_conn in flex_cards:
+            # Compute membership score as proportion of core cards connected
+            # (We'd need core count, but we can use avg_lift as proxy for score)
+            membership_score = min(avg_lift / 5.0, 1.0)  # Normalize to 0-1 range
+            flex_data.append((db_id, card, membership_score, False, 'flex'))
+    
+    if flex_data:
+        cursor.executemany("""
+            INSERT INTO card_community_members 
+                (community_id, card_blueprint, membership_score, is_core, membership_type)
+            VALUES (%s, %s, %s, %s, %s)
+        """, flex_data)
+        conn.commit()
+    
+    logger.info(f"  Added {len(flex_data)} flex cards")
 
 
 def get_available_formats(cursor) -> list[str]:
@@ -259,6 +401,12 @@ def main():
                         help='Minimum co-occurrences for edges (default: 50)')
     parser.add_argument('--resolution', type=float, default=1.0,
                         help='Louvain resolution: higher=more communities (default: 1.0)')
+    parser.add_argument('--flex-min-connections', type=int, default=3,
+                        help='Min core cards a flex card must connect to (default: 3)')
+    parser.add_argument('--flex-min-lift', type=float, default=2.0,
+                        help='Min average lift for flex card inclusion (default: 2.0)')
+    parser.add_argument('--no-flex', action='store_true',
+                        help='Skip flex card detection')
     parser.add_argument('--dry-run', action='store_true',
                         help='Preview without inserting')
     parser.add_argument('--config', default='config.ini', help='Config file path')
@@ -318,8 +466,18 @@ def main():
                     # Compute stats
                     stats = compute_community_stats(G, communities, cursor, format_name, side)
                     
-                    # Store
-                    insert_communities(cursor, conn, format_name, side, stats, args.dry_run)
+                    # Store core communities
+                    db_ids = insert_communities(cursor, conn, format_name, side, stats, args.dry_run)
+                    
+                    # Find and insert flex cards
+                    if not args.no_flex:
+                        flex_cards = find_flex_cards(
+                            G, stats, communities,
+                            min_core_connections=args.flex_min_connections,
+                            min_avg_lift=args.flex_min_lift
+                        )
+                        if flex_cards:
+                            insert_flex_cards(cursor, conn, db_ids, stats, flex_cards, args.dry_run)
                     
                     # Cleanup
                     del G, communities, stats
