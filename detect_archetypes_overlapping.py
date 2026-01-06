@@ -72,14 +72,16 @@ def detect_communities_anchor(
     correlation_threshold: float = 2.0,
     min_community: int = 7,
     anchor_similarity_threshold: float = 3.0,
+    max_anchor_degree: int = 0,
 ) -> list[set]:
     """
     Anchor-based community detection.
     
     1. Find most-played cards as anchors (per culture)
-    2. Skip anchors that are too similar to already-selected anchors
-    3. For each anchor, find cards that correlate strongly with it
-    4. Cards can belong to multiple anchor communities
+    2. Skip anchors that are too broadly connected (splash cards)
+    3. Skip anchors that are too similar to already-selected anchors
+    4. For each anchor, find cards that correlate strongly with it
+    5. Cards can belong to multiple anchor communities
     
     This is domain-aware: communities are centered around popular cards,
     which tend to be deck-defining rather than peripheral.
@@ -89,6 +91,7 @@ def detect_communities_anchor(
         correlation_threshold: Min lift to include card in anchor community
         min_community: Minimum cards for a valid community
         anchor_similarity_threshold: Skip anchor if lift with existing anchor exceeds this
+        max_anchor_degree: Skip anchor if it has more than this many correlations (0 = no limit)
     """
     # Get most-played cards for this format/side, grouped by culture
     cursor.execute("""
@@ -110,17 +113,35 @@ def detect_communities_anchor(
     for culture, cards in cards_by_culture.items():
         logger.info(f"    {culture}: {len(cards)} cards")
     
-    # Select top N anchors per culture, skipping similar ones
+    # Compute degree stats for splash detection
+    if max_anchor_degree > 0:
+        degrees = dict(G.degree())
+        avg_degree = sum(degrees.values()) / len(degrees) if degrees else 0
+        logger.info(f"  Splash filter: max_anchor_degree={max_anchor_degree} (avg={avg_degree:.1f})")
+    
+    # Select top N anchors per culture, skipping similar/splashy ones
     graph_nodes = set(G.nodes())
     selected_anchors = []
     
     for culture, candidates in cards_by_culture.items():
         culture_anchors = []
+        skipped_splash = 0
+        skipped_similar = 0
+        skipped_not_in_graph = 0
         
         for blueprint, games in candidates:
             # Must be in correlation graph
             if blueprint not in graph_nodes:
+                skipped_not_in_graph += 1
                 continue
+            
+            # Check if too broadly connected (splash card)
+            if max_anchor_degree > 0:
+                degree = degrees.get(blueprint, 0)
+                if degree > max_anchor_degree:
+                    skipped_splash += 1
+                    logger.debug(f"    Skipping {blueprint} - too splashy (degree={degree})")
+                    continue
             
             # Check if too similar to already-selected anchor
             too_similar = False
@@ -133,6 +154,7 @@ def detect_communities_anchor(
                         break
             
             if too_similar:
+                skipped_similar += 1
                 continue
             
             culture_anchors.append((blueprint, games, culture))
@@ -141,11 +163,16 @@ def detect_communities_anchor(
                 break
         
         selected_anchors.extend(culture_anchors)
-        logger.info(f"    {culture}: selected {len(culture_anchors)} anchors")
+        skip_info = []
+        if skipped_splash: skip_info.append(f"{skipped_splash} splash")
+        if skipped_similar: skip_info.append(f"{skipped_similar} similar")
+        skip_str = f" (skipped: {', '.join(skip_info)})" if skip_info else ""
+        logger.info(f"    {culture}: selected {len(culture_anchors)} anchors{skip_str}")
     
     logger.info(f"  Total anchors: {len(selected_anchors)}")
     for bp, games, culture in selected_anchors[:10]:
-        logger.info(f"    {bp} ({culture}): {games} games")
+        degree = degrees.get(bp, 0) if max_anchor_degree > 0 else "?"
+        logger.info(f"    {bp} ({culture}): {games} games, degree={degree}")
     
     communities = []
     
@@ -544,6 +571,8 @@ def main():
                         help='Min lift to include card in anchor community (default: 2.0)')
     parser.add_argument('--anchor-similarity', type=float, default=3.0,
                         help='Skip anchor if lift with existing anchor exceeds this (default: 3.0)')
+    parser.add_argument('--max-anchor-degree', type=int, default=0,
+                        help='Skip anchor if it correlates with more than N cards (splash filter, 0=disabled)')
     parser.add_argument('--min-membership', type=float, default=0.0,
                         help='Minimum membership score to keep card in community (default: 0, try 0.3)')
     parser.add_argument('--dry-run', action='store_true',
@@ -603,7 +632,8 @@ def main():
                             num_anchors=args.num_anchors,
                             correlation_threshold=args.correlation_threshold,
                             min_community=args.min_cards,
-                            anchor_similarity_threshold=args.anchor_similarity
+                            anchor_similarity_threshold=args.anchor_similarity,
+                            max_anchor_degree=args.max_anchor_degree
                         )
                         
                         if not anchor_communities:
