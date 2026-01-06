@@ -507,7 +507,7 @@ def insert_communities(
                 culture = comm.get('anchor_culture', '?')
                 anchor_info = f" [anchor: {anchor_name}, {culture}, {comm.get('anchor_games', '?')} games]"
             
-            logger.info(f"\n  Community {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}{anchor_info}")
+            logger.info(f"\n  Archetype {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}{anchor_info}")
             # Show top 10 cards by membership score
             top_cards = sorted(comm['membership_scores'].items(), key=lambda x: x[1], reverse=True)[:10]
             for card, score in top_cards:

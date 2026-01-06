@@ -208,7 +208,7 @@ def insert_communities(
         card_names = get_card_names(cursor, all_cards)
         
         for comm in community_stats[:15]:
-            logger.info(f"\n  Community {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}")
+            logger.info(f"\n  Archetype {comm['community_id']}: {comm['card_count']} cards, avg_lift={comm['avg_internal_lift']}")
             # Show top 10 cards by membership score
             top_cards = sorted(comm['membership_scores'].items(), key=lambda x: x[1], reverse=True)[:10]
             for card, score in top_cards:
@@ -347,7 +347,7 @@ def insert_flex_cards(
             if comm_id in flex_by_community:
                 flex_cards = flex_by_community[comm_id][:5]  # Show top 5
                 if flex_cards:
-                    logger.info(f"\n  Community {comm_id} flex cards:")
+                    logger.info(f"\n  Archetype {comm_id} flex cards:")
                     for card, avg_lift, num_conn in flex_cards:
                         name = card_names.get(card, card)
                         logger.info(f"    + {card} ({name}): avg_lift={avg_lift:.2f}, connections={num_conn}")

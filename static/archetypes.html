@@ -431,6 +431,7 @@
             <a href="/">Home</a>
             <a href="/query.html">Query Tool</a>
             <a href="/admin.html">Admin</a>
+            <a href="/docs">API Docs</a>
         </nav>
     </div>
     
@@ -511,7 +512,7 @@
                 <div class="community-item ${c.side} ${c.is_valid ? '' : 'invalid'} ${c.id === currentCommunityId ? 'selected' : ''}"
                      onclick="selectCommunity(${c.id})">
                     <div class="name">
-                        ${c.archetype_name || `Community #${c.community_id}`}
+                        ${c.archetype_name || `Archetype #${c.community_id}`}
                         <span class="side-badge ${c.side}">${c.side === 'free_peoples' ? 'FP' : 'Shadow'}</span>
                     </div>
                     <div class="meta">
@@ -569,7 +570,7 @@
             detailEl.innerHTML = `
                 <div class="detail-header">
                     <div>
-                        <h2>${community.archetype_name || `Community #${community.community_id}`}</h2>
+                        <h2>${community.archetype_name || `Archetype #${community.community_id}`}</h2>
                         <div style="color: var(--text-secondary); font-size: 13px;">
                             ${community.side === 'free_peoples' ? 'Free Peoples' : 'Shadow'} · ${community.format_name}
                         </div>
@@ -711,7 +712,7 @@
                     const resp = await fetch(url, { signal: hoverAbortController.signal });
                     const data = await resp.json();
                     
-                    relatedEl.innerHTML = '';
+                        relatedEl.innerHTML = '';
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         console.error('Failed to fetch related communities:', err);
