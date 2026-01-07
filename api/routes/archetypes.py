@@ -549,3 +549,328 @@ def get_card_community_associations(
         })
     
     return {"blueprint": blueprint, "communities": communities}
+
+
+@router.get("/card-memberships/{blueprint}")
+def get_card_memberships(
+    blueprint: str,
+    format_name: str = Query(..., description="Format to query"),
+    cursor = Depends(get_db_cursor),
+):
+    """
+    Get all communities this card is currently a member of.
+    """
+    cursor.execute("""
+        SELECT 
+            cc.id,
+            cc.community_id,
+            cc.archetype_name,
+            cc.side,
+            cc.is_orphan_pool,
+            ccm.membership_score,
+            ccm.is_core,
+            ccm.membership_type
+        FROM card_community_members ccm
+        JOIN card_communities cc ON ccm.community_id = cc.id
+        WHERE ccm.card_blueprint = %s AND cc.format_name = %s
+        ORDER BY ccm.membership_score DESC
+    """, (blueprint, format_name))
+    
+    memberships = []
+    for row in cursor.fetchall():
+        memberships.append({
+            "community_id": row[0],
+            "community_num": row[1],
+            "archetype_name": row[2],
+            "side": row[3],
+            "is_orphan_pool": row[4],
+            "membership_score": row[5],
+            "is_core": row[6],
+            "membership_type": row[7],
+        })
+    
+    return {"blueprint": blueprint, "format_name": format_name, "memberships": memberships}
+
+
+@router.post("/communities/{community_id}/cards/{blueprint}")
+def add_card_to_community(
+    community_id: int,
+    blueprint: str,
+    membership_type: str = Query("flex", description="Type: flex or custom"),
+    db = Depends(get_db),
+    _admin = Depends(verify_admin),
+):
+    """
+    Add a card to a community. Requires admin key.
+    
+    - flex: Card correlates with this archetype but wasn't assigned by Louvain
+    - custom: Manually assigned by user
+    """
+    conn, cursor = db
+    
+    if membership_type not in ('flex', 'custom'):
+        raise HTTPException(status_code=400, detail="membership_type must be 'flex' or 'custom'")
+    
+    # Check community exists
+    cursor.execute("SELECT format_name, side FROM card_communities WHERE id = %s", (community_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Community not found")
+    
+    format_name, side = row
+    
+    # Check card exists and matches side
+    cursor.execute("SELECT side FROM card_catalog WHERE blueprint = %s", (blueprint,))
+    card_row = cursor.fetchone()
+    if not card_row:
+        raise HTTPException(status_code=404, detail="Card not found")
+    if card_row[0] != side:
+        raise HTTPException(status_code=400, detail=f"Card side ({card_row[0]}) doesn't match community side ({side})")
+    
+    # Check if already a member
+    cursor.execute("""
+        SELECT id FROM card_community_members 
+        WHERE community_id = %s AND card_blueprint = %s
+    """, (community_id, blueprint))
+    if cursor.fetchone():
+        raise HTTPException(status_code=400, detail="Card already in this community")
+    
+    # Calculate membership score based on correlations with community core cards
+    cursor.execute("""
+        SELECT ccm.card_blueprint FROM card_community_members ccm
+        WHERE ccm.community_id = %s AND ccm.is_core = TRUE
+    """, (community_id,))
+    core_cards = [row[0] for row in cursor.fetchall()]
+    
+    if core_cards:
+        placeholders = ','.join(['%s'] * len(core_cards))
+        cursor.execute(f"""
+            SELECT AVG(lift) FROM card_correlations
+            WHERE format_name = %s AND side = %s
+              AND ((card_a = %s AND card_b IN ({placeholders}))
+                OR (card_b = %s AND card_a IN ({placeholders})))
+        """, [format_name, side, blueprint] + core_cards + [blueprint] + core_cards)
+        avg_lift = cursor.fetchone()[0] or 0
+        membership_score = min(avg_lift / 5.0, 1.0)
+    else:
+        membership_score = 0.5  # Default for empty/orphan communities
+    
+    # Insert
+    cursor.execute("""
+        INSERT INTO card_community_members 
+            (community_id, card_blueprint, membership_score, is_core, membership_type)
+        VALUES (%s, %s, %s, FALSE, %s)
+    """, (community_id, blueprint, membership_score, membership_type))
+    
+    # Update community card count
+    cursor.execute("""
+        UPDATE card_communities 
+        SET card_count = (SELECT COUNT(*) FROM card_community_members WHERE community_id = %s)
+        WHERE id = %s
+    """, (community_id, community_id))
+    
+    conn.commit()
+    
+    return {"success": True, "membership_score": membership_score}
+
+
+@router.delete("/communities/{community_id}/cards/{blueprint}")
+def remove_card_from_community(
+    community_id: int,
+    blueprint: str,
+    db = Depends(get_db),
+    _admin = Depends(verify_admin),
+):
+    """
+    Remove a card from a community. Requires admin key.
+    
+    - If card is core type, it gets moved to the orphan pool
+    - If card is flex or custom type, it's simply removed
+    """
+    conn, cursor = db
+    
+    # Get community info
+    cursor.execute("""
+        SELECT format_name, side, is_orphan_pool FROM card_communities WHERE id = %s
+    """, (community_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Community not found")
+    
+    format_name, side, is_orphan_pool = row
+    
+    # Get membership info
+    cursor.execute("""
+        SELECT membership_type FROM card_community_members 
+        WHERE community_id = %s AND card_blueprint = %s
+    """, (community_id, blueprint))
+    member_row = cursor.fetchone()
+    if not member_row:
+        raise HTTPException(status_code=404, detail="Card not in this community")
+    
+    membership_type = member_row[0]
+    moved_to_orphan = False
+    
+    # Remove from current community
+    cursor.execute("""
+        DELETE FROM card_community_members 
+        WHERE community_id = %s AND card_blueprint = %s
+    """, (community_id, blueprint))
+    
+    # If core card (and not already in orphan pool), move to orphan pool
+    if membership_type == 'core' and not is_orphan_pool:
+        # Get or create orphan pool
+        cursor.execute("""
+            SELECT id FROM card_communities 
+            WHERE format_name = %s AND side = %s AND is_orphan_pool = TRUE
+        """, (format_name, side))
+        orphan_row = cursor.fetchone()
+        
+        if orphan_row:
+            orphan_pool_id = orphan_row[0]
+        else:
+            cursor.execute("""
+                INSERT INTO card_communities 
+                    (format_name, side, community_id, card_count, avg_internal_lift, 
+                     archetype_name, is_valid, is_orphan_pool)
+                VALUES (%s, %s, -1, 0, 0, 'Orphaned Cards', TRUE, TRUE)
+            """, (format_name, side))
+            orphan_pool_id = cursor.lastrowid
+        
+        # Add to orphan pool
+        cursor.execute("""
+            INSERT INTO card_community_members 
+                (community_id, card_blueprint, membership_score, is_core, membership_type)
+            VALUES (%s, %s, 0, FALSE, 'core')
+        """, (orphan_pool_id, blueprint))
+        
+        # Update orphan pool count
+        cursor.execute("""
+            UPDATE card_communities 
+            SET card_count = (SELECT COUNT(*) FROM card_community_members WHERE community_id = %s)
+            WHERE id = %s
+        """, (orphan_pool_id, orphan_pool_id))
+        
+        moved_to_orphan = True
+    
+    # Update original community card count
+    cursor.execute("""
+        UPDATE card_communities 
+        SET card_count = (SELECT COUNT(*) FROM card_community_members WHERE community_id = %s)
+        WHERE id = %s
+    """, (community_id, community_id))
+    
+    conn.commit()
+    
+    return {"success": True, "moved_to_orphan": moved_to_orphan}
+
+
+@router.post("/communities/{target_community_id}/cards/{blueprint}/move")
+def move_card_to_community(
+    target_community_id: int,
+    blueprint: str,
+    source_community_id: int = Query(..., description="Community to move from"),
+    as_custom: bool = Query(True, description="Mark as custom (manual assignment)"),
+    db = Depends(get_db),
+    _admin = Depends(verify_admin),
+):
+    """
+    Move a card from one community to another. Requires admin key.
+    
+    The card will be marked as 'custom' type in the target community
+    to indicate it was manually assigned.
+    """
+    conn, cursor = db
+    
+    if source_community_id == target_community_id:
+        raise HTTPException(status_code=400, detail="Source and target communities are the same")
+    
+    # Get source community info
+    cursor.execute("""
+        SELECT format_name, side FROM card_communities WHERE id = %s
+    """, (source_community_id,))
+    source_row = cursor.fetchone()
+    if not source_row:
+        raise HTTPException(status_code=404, detail="Source community not found")
+    
+    format_name, side = source_row
+    
+    # Verify target community exists and matches
+    cursor.execute("""
+        SELECT format_name, side FROM card_communities WHERE id = %s
+    """, (target_community_id,))
+    target_row = cursor.fetchone()
+    if not target_row:
+        raise HTTPException(status_code=404, detail="Target community not found")
+    if target_row[0] != format_name or target_row[1] != side:
+        raise HTTPException(status_code=400, detail="Target community must be same format and side")
+    
+    # Verify card is in source community
+    cursor.execute("""
+        SELECT membership_score FROM card_community_members 
+        WHERE community_id = %s AND card_blueprint = %s
+    """, (source_community_id, blueprint))
+    member_row = cursor.fetchone()
+    if not member_row:
+        raise HTTPException(status_code=404, detail="Card not in source community")
+    
+    old_score = member_row[0]
+    
+    # Check if already in target
+    cursor.execute("""
+        SELECT id FROM card_community_members 
+        WHERE community_id = %s AND card_blueprint = %s
+    """, (target_community_id, blueprint))
+    if cursor.fetchone():
+        raise HTTPException(status_code=400, detail="Card already in target community")
+    
+    # Remove from source
+    cursor.execute("""
+        DELETE FROM card_community_members 
+        WHERE community_id = %s AND card_blueprint = %s
+    """, (source_community_id, blueprint))
+    
+    # Calculate new membership score for target
+    cursor.execute("""
+        SELECT ccm.card_blueprint FROM card_community_members ccm
+        WHERE ccm.community_id = %s AND ccm.is_core = TRUE
+    """, (target_community_id,))
+    core_cards = [row[0] for row in cursor.fetchall()]
+    
+    if core_cards:
+        placeholders = ','.join(['%s'] * len(core_cards))
+        cursor.execute(f"""
+            SELECT AVG(lift) FROM card_correlations
+            WHERE format_name = %s AND side = %s
+              AND ((card_a = %s AND card_b IN ({placeholders}))
+                OR (card_b = %s AND card_a IN ({placeholders})))
+        """, [format_name, side, blueprint] + core_cards + [blueprint] + core_cards)
+        avg_lift = cursor.fetchone()[0] or 0
+        membership_score = min(avg_lift / 5.0, 1.0)
+    else:
+        membership_score = old_score  # Preserve if no core cards
+    
+    # Add to target
+    new_type = 'custom' if as_custom else 'flex'
+    cursor.execute("""
+        INSERT INTO card_community_members 
+            (community_id, card_blueprint, membership_score, is_core, membership_type)
+        VALUES (%s, %s, %s, FALSE, %s)
+    """, (target_community_id, blueprint, membership_score, new_type))
+    
+    # Update both community counts
+    cursor.execute("""
+        UPDATE card_communities 
+        SET card_count = (SELECT COUNT(*) FROM card_community_members WHERE community_id = %s)
+        WHERE id = %s
+    """, (source_community_id, source_community_id))
+    
+    cursor.execute("""
+        UPDATE card_communities 
+        SET card_count = (SELECT COUNT(*) FROM card_community_members WHERE community_id = %s)
+        WHERE id = %s
+    """, (target_community_id, target_community_id))
+    
+    conn.commit()
+    
+    return {"success": True, "new_membership_score": membership_score}
