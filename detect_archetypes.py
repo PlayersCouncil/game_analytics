@@ -268,7 +268,7 @@ def find_flex_cards(
     G: nx.Graph,
     community_stats: list[dict],
     communities: dict[str, int],
-    min_core_connections: int = 3,
+    min_core_connections_pct: float = 0.3,
     min_avg_lift: float = 2.0,
 ) -> dict[int, list[tuple[str, float, int]]]:
     """
@@ -279,7 +279,7 @@ def find_flex_cards(
         G: Correlation graph
         community_stats: List of community stat dicts (with 'cards', 'membership_scores')
         communities: Card -> community_id mapping from Louvain
-        min_core_connections: Minimum core cards a flex card must connect to
+        min_core_connections_pct: Min fraction of core cards a flex card must connect to (0-1)
         min_avg_lift: Minimum average lift to those core cards
     
     Returns:
@@ -293,8 +293,11 @@ def find_flex_cards(
         # Get core cards (membership_score >= 0.5)
         core_cards = {card for card, score in comm['membership_scores'].items() if score >= 0.5}
         
-        if len(core_cards) < min_core_connections:
+        if len(core_cards) < 3:
             continue  # Not enough core cards to meaningfully detect flex
+        
+        # Calculate minimum connections required (round up to be stricter)
+        min_connections = max(2, int(len(core_cards) * min_core_connections_pct + 0.5))
         
         # Get all cards already in this community
         comm_cards = set(comm['cards'])
@@ -311,7 +314,7 @@ def find_flex_cards(
                     lift = G[candidate][core_card].get('weight', 0)
                     connections.append(lift)
             
-            if len(connections) >= min_core_connections:
+            if len(connections) >= min_connections:
                 avg_lift = sum(connections) / len(connections)
                 if avg_lift >= min_avg_lift:
                     flex_by_community[comm_id].append((candidate, avg_lift, len(connections)))
@@ -401,8 +404,8 @@ def main():
                         help='Minimum co-occurrences for edges (default: 50)')
     parser.add_argument('--resolution', type=float, default=1.0,
                         help='Louvain resolution: higher=more communities (default: 1.0)')
-    parser.add_argument('--flex-min-connections', type=int, default=3,
-                        help='Min core cards a flex card must connect to (default: 3)')
+    parser.add_argument('--flex-min-connections', type=float, default=0.3,
+                        help='Min fraction of core cards a flex card must connect to (0-1, default: 0.3)')
     parser.add_argument('--flex-min-lift', type=float, default=2.0,
                         help='Min average lift for flex card inclusion (default: 2.0)')
     parser.add_argument('--no-flex', action='store_true',
@@ -473,7 +476,7 @@ def main():
                     if not args.no_flex:
                         flex_cards = find_flex_cards(
                             G, stats, communities,
-                            min_core_connections=args.flex_min_connections,
+                            min_core_connections_pct=args.flex_min_connections,
                             min_avg_lift=args.flex_min_lift
                         )
                         if flex_cards:

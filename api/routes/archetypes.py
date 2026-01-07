@@ -117,6 +117,7 @@ def get_community_detail(
             ccm.card_blueprint,
             ccm.membership_score,
             ccm.is_core,
+            ccm.membership_type,
             cat.card_name,
             cat.culture,
             cat.card_type,
@@ -124,7 +125,7 @@ def get_community_detail(
         FROM card_community_members ccm
         LEFT JOIN card_catalog cat ON ccm.card_blueprint = cat.blueprint
         WHERE ccm.community_id = %s
-        ORDER BY ccm.membership_score DESC
+        ORDER BY ccm.membership_type ASC, ccm.membership_score DESC
     """, (community_id,))
     
     members = []
@@ -133,10 +134,11 @@ def get_community_detail(
             "blueprint": row[0],
             "membership_score": row[1],
             "is_core": row[2],
-            "name": row[3],
-            "culture": row[4],
-            "card_type": row[5],
-            "image_url": row[6],
+            "membership_type": row[3],
+            "name": row[4],
+            "culture": row[5],
+            "card_type": row[6],
+            "image_url": row[7],
         })
     
     community["members"] = members
