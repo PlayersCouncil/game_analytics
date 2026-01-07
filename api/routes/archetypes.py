@@ -914,12 +914,11 @@ def search_cards_in_communities(
     Search for cards by name within a format and return which communities they belong to.
     
     Returns cards matching the query and their core community membership.
-    Case-insensitive and accent-insensitive search.
+    Case-insensitive search using LOWER().
     """
-    search_term = f"%{query}%"
+    search_term = f"%{query.lower()}%"
     
     # Find cards matching the query that are core members of communities in this format
-    # Use COLLATE for case and accent insensitive search
     cursor.execute("""
         SELECT DISTINCT
             cat.blueprint,
@@ -934,7 +933,7 @@ def search_cards_in_communities(
         WHERE cc.format_name = %s
           AND cc.is_valid = TRUE
           AND ccm.membership_type = 'core'
-          AND cat.card_name COLLATE utf8_unicode_ci LIKE %s COLLATE utf8_unicode_ci
+          AND LOWER(cat.card_name) LIKE %s
         ORDER BY cat.card_name
         LIMIT 50
     """, (format_name, search_term))
@@ -951,3 +950,43 @@ def search_cards_in_communities(
         })
     
     return {"query": query, "format_name": format_name, "results": results}
+
+
+@router.get("/card-index")
+def get_card_index(
+    format_name: str = Query(..., description="Format to query"),
+    cursor = Depends(get_db_cursor),
+):
+    """
+    Get a searchable index of all cards with their community memberships for a format.
+    Used for client-side searching with accent normalization.
+    """
+    cursor.execute("""
+        SELECT 
+            cat.blueprint,
+            cat.card_name,
+            cat.side,
+            cc.id as community_id,
+            cc.archetype_name,
+            cc.is_orphan_pool
+        FROM card_catalog cat
+        JOIN card_community_members ccm ON cat.blueprint = ccm.card_blueprint
+        JOIN card_communities cc ON ccm.community_id = cc.id
+        WHERE cc.format_name = %s
+          AND cc.is_valid = TRUE
+          AND ccm.membership_type = 'core'
+        ORDER BY cat.card_name
+    """, (format_name,))
+    
+    cards = []
+    for row in cursor.fetchall():
+        cards.append({
+            "blueprint": row[0],
+            "name": row[1],
+            "side": row[2],
+            "community_id": row[3],
+            "archetype_name": row[4],
+            "is_orphan_pool": row[5],
+        })
+    
+    return {"format_name": format_name, "cards": cards}

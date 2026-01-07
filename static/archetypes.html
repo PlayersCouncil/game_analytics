@@ -715,6 +715,7 @@
     <script>
         let currentCommunityId = null;
         let communities = [];
+        let cardIndex = [];  // Local cache of cards for searching
         
         // Admin mode - check for stored admin key
         const adminKey = localStorage.getItem('gemp_analytics_key') || '';
@@ -722,6 +723,11 @@
         
         function getAdminHeaders() {
             return isAdmin ? { 'X-Admin-Key': adminKey } : {};
+        }
+        
+        // Normalize string for accent-insensitive search
+        function normalizeForSearch(str) {
+            return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         }
         
         // Load available formats on page load
@@ -754,8 +760,9 @@
             
             // Clear current selection and search
             currentCommunityId = null;
+            cardIndex = [];  // Clear card index
             document.getElementById('communityDetail').innerHTML = 
-                '<div class="empty-state">Select a community to view details</div>';
+                '<div class="empty-state">Select an archetype to view details</div>';
             document.getElementById('cardSearch').value = '';
             
             const listEl = document.getElementById('communityList');
@@ -771,9 +778,27 @@
                 communities = data.communities;
                 
                 renderCommunityList();
+                
+                // Load card index in background for searching
+                loadCardIndex(format);
             } catch (err) {
                 console.error('Failed to load communities:', err);
                 listEl.innerHTML = '<div class="empty-state">Error loading communities</div>';
+            }
+        }
+        
+        async function loadCardIndex(format) {
+            try {
+                const resp = await fetch(`/api/card-index?format_name=${encodeURIComponent(format)}`);
+                const data = await resp.json();
+                // Pre-normalize names for faster searching
+                cardIndex = data.cards.map(card => ({
+                    ...card,
+                    normalizedName: normalizeForSearch(card.name || '')
+                }));
+            } catch (err) {
+                console.error('Failed to load card index:', err);
+                cardIndex = [];
             }
         }
         
@@ -1391,11 +1416,10 @@
             }
         }
         
-        // Card search in header
+        // Card search in header - uses local cardIndex
         let searchTimeout = null;
-        let lastSearchResults = null;  // Store results for Enter key navigation
         
-        async function handleCardSearch(navigateOnSingleMatch = false) {
+        function handleCardSearch(navigateOnSingleMatch = false) {
             const searchEl = document.getElementById('cardSearch');
             const query = searchEl.value.trim();
             
@@ -1404,56 +1428,57 @@
                 el.classList.remove('search-highlight');
             });
             
-            // Clear stored results
-            lastSearchResults = null;
-            
             // Wait for 3+ characters
             if (query.length < 3) return;
             
-            // Debounce
+            // Wait for card index to load
+            if (cardIndex.length === 0) return;
+            
+            // Debounce for typing, but not for Enter key
             if (searchTimeout) clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(async () => {
-                const format = document.getElementById('formatSelect').value;
-                if (!format) return;
+            
+            const doSearch = () => {
+                const normalizedQuery = normalizeForSearch(query);
                 
-                try {
-                    const resp = await fetch(`/api/search-cards?format_name=${encodeURIComponent(format)}&query=${encodeURIComponent(query)}`);
-                    const data = await resp.json();
-                    
-                    if (!data.results || data.results.length === 0) return;
-                    
-                    // Store results for Enter key navigation
-                    lastSearchResults = data.results;
-                    
-                    // Get unique community IDs - separate orphan and non-orphan
-                    const nonOrphanResults = data.results.filter(r => !r.is_orphan_pool);
-                    const orphanResults = data.results.filter(r => r.is_orphan_pool);
-                    const nonOrphanCommunityIds = [...new Set(nonOrphanResults.map(r => r.community_id))];
-                    const orphanCommunityIds = [...new Set(orphanResults.map(r => r.community_id))];
-                    
-                    // Highlight all matching archetypes (including orphan pools)
-                    [...nonOrphanCommunityIds, ...orphanCommunityIds].forEach(commId => {
-                        const commEl = document.querySelector(`.community-item[data-community-id="${commId}"]`);
-                        if (commEl) commEl.classList.add('search-highlight');
-                    });
-                    
-                    // Only navigate if Enter was pressed
-                    if (navigateOnSingleMatch) {
-                        // Prefer non-orphan if available
-                        if (nonOrphanCommunityIds.length === 1) {
-                            selectCommunity(nonOrphanCommunityIds[0]);
-                            setTimeout(() => setCardNameFilter(query), 100);
-                        } else if (nonOrphanCommunityIds.length === 0 && orphanCommunityIds.length === 1) {
-                            // Only orphan pool matches - navigate to it
-                            selectCommunity(orphanCommunityIds[0]);
-                            setTimeout(() => setCardNameFilter(query), 100);
-                        }
-                        // If multiple matches, don't navigate (just leave highlights)
+                // Search local index
+                const matches = cardIndex.filter(card => 
+                    card.normalizedName.includes(normalizedQuery)
+                );
+                
+                if (matches.length === 0) return;
+                
+                // Get unique community IDs - separate orphan and non-orphan
+                const nonOrphanMatches = matches.filter(r => !r.is_orphan_pool);
+                const orphanMatches = matches.filter(r => r.is_orphan_pool);
+                const nonOrphanCommunityIds = [...new Set(nonOrphanMatches.map(r => r.community_id))];
+                const orphanCommunityIds = [...new Set(orphanMatches.map(r => r.community_id))];
+                
+                // Highlight all matching archetypes (including orphan pools)
+                [...nonOrphanCommunityIds, ...orphanCommunityIds].forEach(commId => {
+                    const commEl = document.querySelector(`.community-item[data-community-id="${commId}"]`);
+                    if (commEl) commEl.classList.add('search-highlight');
+                });
+                
+                // Only navigate if Enter was pressed
+                if (navigateOnSingleMatch) {
+                    // Prefer non-orphan if available
+                    if (nonOrphanCommunityIds.length === 1) {
+                        selectCommunity(nonOrphanCommunityIds[0]);
+                        setTimeout(() => setCardNameFilter(query), 100);
+                    } else if (nonOrphanCommunityIds.length === 0 && orphanCommunityIds.length === 1) {
+                        // Only orphan pool matches - navigate to it
+                        selectCommunity(orphanCommunityIds[0]);
+                        setTimeout(() => setCardNameFilter(query), 100);
                     }
-                } catch (err) {
-                    console.error('Card search failed:', err);
+                    // If multiple matches, don't navigate (just leave highlights)
                 }
-            }, navigateOnSingleMatch ? 0 : 300);  // No debounce on Enter
+            };
+            
+            if (navigateOnSingleMatch) {
+                doSearch();  // Immediate for Enter key
+            } else {
+                searchTimeout = setTimeout(doSearch, 150);  // Debounce for typing
+            }
         }
         
         function handleCardSearchKeydown(event) {
