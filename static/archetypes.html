@@ -945,7 +945,7 @@
                                 ' data-name="' + normalizedName + '"' +
                                 ' data-card="' + cardDataStr + '"' +
                                 ' data-community-id="' + community.id + '"' +
-                                ' data-is-orphan="' + (community.is_orphan_pool || false) + '"' +
+                                ' data-is-orphan="' + (community.is_orphan_pool ? 'true' : 'false') + '"' +
                                 ' onclick="openCardPanelFromElement(this)">' +
                                 '<img src="' + (card.image_url || '/static/images/card-back.png') + '"' +
                                 ' alt="' + (card.name || card.blueprint).replace(/"/g, '&quot;') + '"' +
