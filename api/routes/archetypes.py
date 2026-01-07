@@ -2,12 +2,25 @@
 Card community / archetype API endpoints.
 """
 
+import os
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, Header, HTTPException
 
-from ..main import get_db_cursor
+from ..main import get_db_cursor, get_db
 
 router = APIRouter(tags=["archetypes"])
+
+# Admin key from environment
+ADMIN_KEY = os.environ.get('GEMP_ANALYTICS_ADMIN_KEY', '')
+
+
+def verify_admin(x_admin_key: Optional[str] = Header(None)):
+    """Dependency to verify admin access."""
+    if not ADMIN_KEY:
+        raise HTTPException(status_code=500, detail="Admin key not configured")
+    if x_admin_key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Invalid admin key")
+    return True
 
 
 @router.get("/communities")
@@ -31,6 +44,7 @@ def list_communities(
             cc.avg_internal_lift,
             cc.archetype_name,
             cc.is_valid,
+            cc.is_orphan_pool,
             cc.notes,
             cc.created_at
         FROM card_communities cc
@@ -45,7 +59,8 @@ def list_communities(
     if not include_invalid:
         query += " AND cc.is_valid = TRUE"
     
-    query += " ORDER BY cc.card_count DESC"
+    # Sort orphan pools last, then by card count
+    query += " ORDER BY cc.is_orphan_pool ASC, cc.card_count DESC"
     
     cursor.execute(query, params)
     rows = cursor.fetchall()
@@ -62,8 +77,9 @@ def list_communities(
             "avg_internal_lift": row[6],
             "archetype_name": row[7],
             "is_valid": row[8],
-            "notes": row[9],
-            "created_at": row[10].isoformat() if row[10] else None,
+            "is_orphan_pool": row[9],
+            "notes": row[10],
+            "created_at": row[11].isoformat() if row[11] else None,
         })
     
     return {"format_name": format_name, "communities": communities}
@@ -89,6 +105,7 @@ def get_community_detail(
             cc.avg_internal_lift,
             cc.archetype_name,
             cc.is_valid,
+            cc.is_orphan_pool,
             cc.notes
         FROM card_communities cc
         WHERE cc.id = %s
@@ -108,7 +125,8 @@ def get_community_detail(
         "avg_internal_lift": row[6],
         "archetype_name": row[7],
         "is_valid": row[8],
-        "notes": row[9],
+        "is_orphan_pool": row[9],
+        "notes": row[10],
     }
     
     # Get member cards with names
@@ -153,10 +171,27 @@ def update_community(
     is_valid: Optional[bool] = Query(None),
     notes: Optional[str] = Query(None),
     cursor = Depends(get_db_cursor),
+    _admin = Depends(verify_admin),
 ):
     """
     Update community metadata (name, validity, notes).
+    Requires admin key.
     """
+    # Check if this is an orphan pool
+    cursor.execute("""
+        SELECT is_orphan_pool FROM card_communities WHERE id = %s
+    """, (community_id,))
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Community not found")
+    
+    is_orphan_pool = row[0]
+    
+    # Orphan pool restrictions
+    if is_orphan_pool:
+        if is_valid is not None and not is_valid:
+            raise HTTPException(status_code=400, detail="Cannot mark orphan pool as invalid")
+    
     # Build update query dynamically
     updates = []
     params = []
@@ -188,6 +223,164 @@ def update_community(
     cursor._connection.commit()
     
     return {"success": True, "updated_fields": len(updates)}
+
+
+@router.delete("/communities/{community_id}/reallocate")
+def delete_and_reallocate(
+    community_id: int,
+    db = Depends(get_db),
+    _admin = Depends(verify_admin),
+):
+    """
+    Delete a community and reallocate its cards to best-fit communities.
+    
+    Cards are moved to their best-fit community if one is clearly better than
+    alternatives (15% margin), otherwise they go to the orphan pool.
+    
+    Requires admin key.
+    """
+    conn, cursor = db
+    
+    # Get community info
+    cursor.execute("""
+        SELECT format_name, side, is_orphan_pool 
+        FROM card_communities 
+        WHERE id = %s
+    """, (community_id,))
+    
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Community not found")
+    
+    format_name, side, is_orphan_pool = row
+    
+    if is_orphan_pool:
+        raise HTTPException(status_code=400, detail="Cannot delete the orphan pool")
+    
+    # Get cards from this community (only core cards - flex are just removed)
+    cursor.execute("""
+        SELECT card_blueprint FROM card_community_members 
+        WHERE community_id = %s AND membership_type = 'core'
+    """, (community_id,))
+    cards_to_reallocate = [row[0] for row in cursor.fetchall()]
+    
+    if not cards_to_reallocate:
+        # No core cards, just delete the community
+        cursor.execute("DELETE FROM card_community_members WHERE community_id = %s", (community_id,))
+        cursor.execute("DELETE FROM card_communities WHERE id = %s", (community_id,))
+        conn.commit()
+        return {"success": True, "deleted": True, "reallocated": 0, "orphaned": 0}
+    
+    # Get other communities for this format/side (excluding orphan pool for now)
+    cursor.execute("""
+        SELECT id, community_id FROM card_communities 
+        WHERE format_name = %s AND side = %s AND id != %s AND is_orphan_pool = FALSE
+    """, (format_name, side, community_id))
+    other_communities = {row[0]: row[1] for row in cursor.fetchall()}
+    
+    # Get core cards for each other community
+    community_cores = {}
+    for other_id in other_communities:
+        cursor.execute("""
+            SELECT card_blueprint FROM card_community_members 
+            WHERE community_id = %s AND is_core = TRUE
+        """, (other_id,))
+        community_cores[other_id] = set(row[0] for row in cursor.fetchall())
+    
+    # Get or create orphan pool
+    cursor.execute("""
+        SELECT id FROM card_communities 
+        WHERE format_name = %s AND side = %s AND is_orphan_pool = TRUE
+    """, (format_name, side))
+    orphan_row = cursor.fetchone()
+    if orphan_row:
+        orphan_pool_id = orphan_row[0]
+    else:
+        cursor.execute("""
+            INSERT INTO card_communities 
+                (format_name, side, community_id, card_count, avg_internal_lift, 
+                 archetype_name, is_valid, is_orphan_pool)
+            VALUES (%s, %s, -1, 0, 0, 'Orphaned Cards', TRUE, TRUE)
+        """, (format_name, side))
+        orphan_pool_id = cursor.lastrowid
+    
+    reallocated = 0
+    orphaned = 0
+    
+    for card_bp in cards_to_reallocate:
+        # Get correlations for this card with all other cards
+        cursor.execute("""
+            SELECT card_b, lift FROM card_correlations 
+            WHERE format_name = %s AND side = %s AND card_a = %s
+            UNION
+            SELECT card_a, lift FROM card_correlations 
+            WHERE format_name = %s AND side = %s AND card_b = %s
+        """, (format_name, side, card_bp, format_name, side, card_bp))
+        
+        card_correlations = {row[0]: row[1] for row in cursor.fetchall()}
+        
+        # Compute average lift to each community's core cards
+        community_scores = {}
+        for comm_id, core_cards in community_cores.items():
+            if not core_cards:
+                continue
+            lifts = [card_correlations.get(core_card, 0) for core_card in core_cards]
+            avg_lift = sum(lifts) / len(lifts) if lifts else 0
+            if avg_lift > 0:
+                community_scores[comm_id] = avg_lift
+        
+        # Find best fit with 15% margin
+        best_community = None
+        if community_scores:
+            sorted_scores = sorted(community_scores.items(), key=lambda x: x[1], reverse=True)
+            best_id, best_score = sorted_scores[0]
+            
+            # Check for clear winner (15% margin or only one option)
+            if len(sorted_scores) == 1:
+                best_community = best_id
+            elif best_score > 0:
+                second_score = sorted_scores[1][1] if len(sorted_scores) > 1 else 0
+                # 15% margin means best must be at least 1.15x the second
+                if second_score == 0 or best_score >= second_score * 1.15:
+                    best_community = best_id
+        
+        if best_community:
+            # Add as flex card to best community
+            cursor.execute("""
+                INSERT INTO card_community_members 
+                    (community_id, card_blueprint, membership_score, is_core, membership_type)
+                VALUES (%s, %s, %s, FALSE, 'flex')
+            """, (best_community, card_bp, min(best_score / 5.0, 1.0)))
+            reallocated += 1
+        else:
+            # Move to orphan pool
+            cursor.execute("""
+                INSERT INTO card_community_members 
+                    (community_id, card_blueprint, membership_score, is_core, membership_type)
+                VALUES (%s, %s, 0, FALSE, 'core')
+            """, (orphan_pool_id, card_bp))
+            orphaned += 1
+    
+    # Delete the original community and its members
+    cursor.execute("DELETE FROM card_community_members WHERE community_id = %s", (community_id,))
+    cursor.execute("DELETE FROM card_communities WHERE id = %s", (community_id,))
+    
+    # Update orphan pool card count
+    cursor.execute("""
+        UPDATE card_communities 
+        SET card_count = (SELECT COUNT(*) FROM card_community_members WHERE community_id = %s)
+        WHERE id = %s
+    """, (orphan_pool_id, orphan_pool_id))
+    
+    conn.commit()
+    
+    return {
+        "success": True,
+        "deleted": True,
+        "reallocated": reallocated,
+        "orphaned": orphaned,
+        "total_cards": len(cards_to_reallocate)
+    }
 
 
 @router.get("/communities/{community_id}/correlations")

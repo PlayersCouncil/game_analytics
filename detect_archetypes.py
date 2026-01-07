@@ -123,11 +123,14 @@ def compute_community_stats(
     cursor,
     format_name: str,
     side: str,
-) -> list[dict]:
+    min_community_size: int = 7,
+) -> tuple[list[dict], list[str]]:
     """
     Compute statistics for each community.
     
-    Returns list of community info dicts.
+    Returns:
+        - List of community info dicts (communities meeting size threshold)
+        - List of orphaned card blueprints (from communities below threshold)
     """
     # Group cards by community
     community_cards = defaultdict(list)
@@ -135,10 +138,12 @@ def compute_community_stats(
         community_cards[comm_id].append(card)
     
     results = []
+    orphaned_cards = []
     
     for comm_id, cards in community_cards.items():
-        # Skip tiny communities (likely noise)
-        if len(cards) < 7:
+        # Communities below threshold become orphans
+        if len(cards) < min_community_size:
+            orphaned_cards.extend(cards)
             continue
         
         # Compute average internal lift
@@ -169,10 +174,99 @@ def compute_community_stats(
     # Sort by size descending
     results.sort(key=lambda x: x['card_count'], reverse=True)
     
-    return results
+    return results, orphaned_cards
+
+
+def get_or_create_orphan_pool(cursor, conn, format_name: str, side: str) -> int:
+    """
+    Get or create the orphan pool community for a format/side.
+    Returns the database ID of the orphan pool.
+    """
+    # Check if orphan pool exists
+    cursor.execute("""
+        SELECT id FROM card_communities
+        WHERE format_name = %s AND side = %s AND is_orphan_pool = TRUE
+    """, (format_name, side))
+    
+    row = cursor.fetchone()
+    if row:
+        return row[0]
+    
+    # Create orphan pool
+    cursor.execute("""
+        INSERT INTO card_communities 
+            (format_name, side, community_id, card_count, avg_internal_lift, 
+             archetype_name, is_valid, is_orphan_pool)
+        VALUES (%s, %s, -1, 0, 0, 'Orphaned Cards', TRUE, TRUE)
+    """, (format_name, side))
+    conn.commit()
+    
+    return cursor.lastrowid
+
+
+def update_orphan_pool(
+    cursor, 
+    conn, 
+    format_name: str, 
+    side: str, 
+    orphaned_cards: list[str],
+    dry_run: bool = False
+):
+    """
+    Update the orphan pool with newly orphaned cards.
+    """
+    if not orphaned_cards:
+        logger.info("  No orphaned cards")
+        return
+    
+    if dry_run:
+        logger.info(f"\n  DRY RUN: Would add {len(orphaned_cards)} cards to orphan pool")
+        # Get card names for preview
+        card_names = get_card_names(cursor, orphaned_cards[:10])
+        for card in orphaned_cards[:10]:
+            name = card_names.get(card, card)
+            logger.info(f"    {card} ({name})")
+        if len(orphaned_cards) > 10:
+            logger.info(f"    ... and {len(orphaned_cards) - 10} more")
+        return
+    
+    orphan_pool_id = get_or_create_orphan_pool(cursor, conn, format_name, side)
+    
+    # Clear existing orphan pool members (they'll be re-evaluated)
+    cursor.execute("""
+        DELETE FROM card_community_members 
+        WHERE community_id = %s AND membership_type = 'core'
+    """, (orphan_pool_id,))
+    
+    # Add orphaned cards
+    orphan_data = [
+        (orphan_pool_id, card, 0.0, False, 'core')
+        for card in orphaned_cards
+    ]
+    
+    cursor.executemany("""
+        INSERT INTO card_community_members 
+            (community_id, card_blueprint, membership_score, is_core, membership_type)
+        VALUES (%s, %s, %s, %s, %s)
+    """, orphan_data)
+    
+    # Update card count
+    cursor.execute("""
+        UPDATE card_communities 
+        SET card_count = (
+            SELECT COUNT(*) FROM card_community_members WHERE community_id = %s
+        )
+        WHERE id = %s
+    """, (orphan_pool_id, orphan_pool_id))
+    
+    conn.commit()
+    logger.info(f"  Added {len(orphaned_cards)} cards to orphan pool")
 
 
 def get_card_names(cursor, blueprints: list) -> dict[str, str]:
+    """Fetch card names from catalog."""
+    if not blueprints:
+        return {}
     """Fetch card names from catalog."""
     if not blueprints:
         return {}
@@ -466,8 +560,8 @@ def main():
                         logger.info("  No communities detected")
                         continue
                     
-                    # Compute stats
-                    stats = compute_community_stats(G, communities, cursor, format_name, side)
+                    # Compute stats (returns tuple: stats list, orphaned cards)
+                    stats, orphaned_cards = compute_community_stats(G, communities, cursor, format_name, side)
                     
                     # Store core communities
                     db_ids = insert_communities(cursor, conn, format_name, side, stats, args.dry_run)
@@ -481,6 +575,9 @@ def main():
                         )
                         if flex_cards:
                             insert_flex_cards(cursor, conn, db_ids, stats, flex_cards, args.dry_run)
+                    
+                    # Handle orphaned cards
+                    update_orphan_pool(cursor, conn, format_name, side, orphaned_cards, args.dry_run)
                     
                     # Cleanup
                     del G, communities, stats

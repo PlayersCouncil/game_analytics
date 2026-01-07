@@ -86,6 +86,20 @@
             color: #000;
         }
         
+        button.danger {
+            background: #dc3545;
+            border-color: #dc3545;
+        }
+        
+        button.danger:hover {
+            background: #c82333;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         .main-layout {
             display: grid;
             grid-template-columns: 350px 1fr;
@@ -121,6 +135,12 @@
         
         .community-item.invalid {
             opacity: 0.5;
+        }
+        
+        .community-item.orphan-pool {
+            background: var(--bg-primary);
+            border-left-color: #6c757d;
+            border-style: dashed;
         }
         
         .community-item.free_peoples {
@@ -480,6 +500,14 @@
         let currentCommunityId = null;
         let communities = [];
         
+        // Admin mode - check for stored admin key
+        const adminKey = localStorage.getItem('gemp_analytics_key') || '';
+        const isAdmin = !!adminKey;
+        
+        function getAdminHeaders() {
+            return isAdmin ? { 'X-Admin-Key': adminKey } : {};
+        }
+        
         // Load available formats on page load
         async function loadFormats() {
             try {
@@ -541,14 +569,14 @@
             }
             
             listEl.innerHTML = communities.map(c => `
-                <div class="community-item ${c.side} ${c.is_valid ? '' : 'invalid'} ${c.id === currentCommunityId ? 'selected' : ''}"
+                <div class="community-item ${c.side} ${c.is_valid ? '' : 'invalid'} ${c.is_orphan_pool ? 'orphan-pool' : ''} ${c.id === currentCommunityId ? 'selected' : ''}"
                      onclick="selectCommunity(${c.id})">
                     <div class="name">
-                        ${c.archetype_name || `Archetype #${c.community_id}`}
+                        ${c.is_orphan_pool ? '📦 ' : ''}${c.archetype_name || `Archetype #${c.community_id}`}
                         <span class="side-badge ${c.side}">${c.side === 'free_peoples' ? 'FP' : 'Shadow'}</span>
                     </div>
                     <div class="meta">
-                        ${c.card_count} cards · lift ${c.avg_internal_lift?.toFixed(1) || '?'}
+                        ${c.card_count} cards ${!c.is_orphan_pool ? `· lift ${c.avg_internal_lift?.toFixed(1) || '?'}` : ''}
                         ${!c.is_valid ? ' · ❌ Invalid' : ''}
                     </div>
                 </div>
@@ -604,21 +632,28 @@
             detailEl.innerHTML = `
                 <div class="detail-header">
                     <div>
-                        <h2>${community.archetype_name || `Archetype #${community.community_id}`}</h2>
+                        <h2>${community.is_orphan_pool ? '📦 ' : ''}${community.archetype_name || `Archetype #${community.community_id}`}</h2>
                         <div style="color: var(--text-secondary); font-size: 13px;">
                             ${community.side === 'free_peoples' ? 'Free Peoples' : 'Shadow'} · ${community.format_name}
+                            ${community.is_orphan_pool ? ' · Orphan Pool' : ''}
                         </div>
                     </div>
-                    <div class="detail-actions">
+                    <div class="detail-actions" ${!isAdmin ? 'style="display:none;"' : ''}>
                         <input type="text" class="name-input" id="archetypeName" 
                                placeholder="Archetype name..." 
                                value="${community.archetype_name || ''}"
-                               onkeydown="if(event.key === 'Enter') saveName(${community.id})">
-                        <button onclick="saveName(${community.id})" class="success">Save Name</button>
+                               onkeydown="if(event.key === 'Enter') saveName(${community.id})"
+                               ${community.is_orphan_pool ? 'disabled' : ''}>
+                        <button onclick="saveName(${community.id})" class="success" ${community.is_orphan_pool ? 'disabled' : ''}>Save Name</button>
+                        ${!community.is_orphan_pool ? `
                         <button onclick="toggleValid(${community.id}, ${!community.is_valid})" 
                                 class="${community.is_valid ? 'warning' : 'success'}">
                             ${community.is_valid ? 'Mark Invalid' : 'Mark Valid'}
                         </button>
+                        <button onclick="deleteAndReallocate(${community.id})" class="danger">
+                            Delete & Reallocate
+                        </button>
+                        ` : ''}
                     </div>
                 </div>
                 
@@ -700,43 +735,89 @@
         async function saveName(id) {
             const name = document.getElementById('archetypeName').value.trim();
             try {
-                await fetch(`/api/communities/${id}?archetype_name=${encodeURIComponent(name)}`, {
-                    method: 'PUT'
+                const resp = await fetch(`/api/communities/${id}?archetype_name=${encodeURIComponent(name)}`, {
+                    method: 'PUT',
+                    headers: getAdminHeaders()
                 });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Failed');
+                }
                 // Update local cache
                 const comm = communities.find(c => c.id === id);
                 if (comm) comm.archetype_name = name;
                 renderCommunityList();
             } catch (err) {
                 console.error('Failed to save name:', err);
-                alert('Failed to save');
+                alert('Failed to save: ' + err.message);
             }
         }
         
         async function saveNotes(id) {
             const notes = document.getElementById('communityNotes').value;
             try {
-                await fetch(`/api/communities/${id}?notes=${encodeURIComponent(notes)}`, {
-                    method: 'PUT'
+                const resp = await fetch(`/api/communities/${id}?notes=${encodeURIComponent(notes)}`, {
+                    method: 'PUT',
+                    headers: getAdminHeaders()
                 });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Failed');
+                }
                 alert('Notes saved');
             } catch (err) {
                 console.error('Failed to save notes:', err);
-                alert('Failed to save');
+                alert('Failed to save: ' + err.message);
             }
         }
         
         async function toggleValid(id, newValid) {
             try {
-                await fetch(`/api/communities/${id}?is_valid=${newValid}`, {
-                    method: 'PUT'
+                const resp = await fetch(`/api/communities/${id}?is_valid=${newValid}`, {
+                    method: 'PUT',
+                    headers: getAdminHeaders()
                 });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Failed');
+                }
                 // Refresh
                 loadCommunities();
                 selectCommunity(id);
             } catch (err) {
                 console.error('Failed to toggle validity:', err);
-                alert('Failed to update');
+                alert('Failed to update: ' + err.message);
+            }
+        }
+        
+        async function deleteAndReallocate(id) {
+            const comm = communities.find(c => c.id === id);
+            const name = comm?.archetype_name || `Archetype #${comm?.community_id}`;
+            
+            if (!confirm(`Delete "${name}" and reallocate its cards to other archetypes?\n\nCards will be moved to their best-fit archetype, or to the orphan pool if no clear fit exists.`)) {
+                return;
+            }
+            
+            try {
+                const resp = await fetch(`/api/communities/${id}/reallocate`, {
+                    method: 'DELETE',
+                    headers: getAdminHeaders()
+                });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    throw new Error(err.detail || 'Failed');
+                }
+                const result = await resp.json();
+                alert(`Deleted! ${result.reallocated} cards reallocated, ${result.orphaned} cards orphaned.`);
+                
+                // Refresh and clear selection
+                currentCommunityId = null;
+                document.getElementById('communityDetail').innerHTML = 
+                    '<div class="empty-state">Select a community to view details</div>';
+                loadCommunities();
+            } catch (err) {
+                console.error('Failed to delete:', err);
+                alert('Failed to delete: ' + err.message);
             }
         }
         
@@ -770,7 +851,19 @@
                     const resp = await fetch(url, { signal: hoverAbortController.signal });
                     const data = await resp.json();
                     
+                    if (data.communities && data.communities.length > 0) {
+                        relatedEl.innerHTML = `
+                            <div class="title">Also appears in:</div>
+                            ${data.communities.map(c => `
+                                <div class="related-community-item">
+                                    <span class="name">${c.archetype_name || `Archetype #${c.community_id}`}</span>
+                                    <span class="lift">lift ${c.avg_lift}</span>
+                                </div>
+                            `).join('')}
+                        `;
+                    } else {
                         relatedEl.innerHTML = '';
+                    }
                 } catch (err) {
                     if (err.name !== 'AbortError') {
                         console.error('Failed to fetch related communities:', err);
