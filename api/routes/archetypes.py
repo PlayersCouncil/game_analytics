@@ -38,7 +38,6 @@ def list_communities(
             cc.id,
             cc.format_name,
             cc.side,
-            cc.community_id,
             cc.card_count,
             cc.deck_count,
             cc.avg_internal_lift,
@@ -71,15 +70,14 @@ def list_communities(
             "id": row[0],
             "format_name": row[1],
             "side": row[2],
-            "community_id": row[3],
-            "card_count": row[4],
-            "deck_count": row[5],
-            "avg_internal_lift": row[6],
-            "archetype_name": row[7],
-            "is_valid": row[8],
-            "is_orphan_pool": row[9],
-            "notes": row[10],
-            "created_at": row[11].isoformat() if row[11] else None,
+            "card_count": row[3],
+            "deck_count": row[4],
+            "avg_internal_lift": row[5],
+            "archetype_name": row[6],
+            "is_valid": row[7],
+            "is_orphan_pool": row[8],
+            "notes": row[9],
+            "created_at": row[10].isoformat() if row[10] else None,
         })
     
     return {"format_name": format_name, "communities": communities}
@@ -99,7 +97,6 @@ def get_community_detail(
             cc.id,
             cc.format_name,
             cc.side,
-            cc.community_id,
             cc.card_count,
             cc.deck_count,
             cc.avg_internal_lift,
@@ -119,14 +116,13 @@ def get_community_detail(
         "id": row[0],
         "format_name": row[1],
         "side": row[2],
-        "community_id": row[3],
-        "card_count": row[4],
-        "deck_count": row[5],
-        "avg_internal_lift": row[6],
-        "archetype_name": row[7],
-        "is_valid": row[8],
-        "is_orphan_pool": row[9],
-        "notes": row[10],
+        "card_count": row[3],
+        "deck_count": row[4],
+        "avg_internal_lift": row[5],
+        "archetype_name": row[6],
+        "is_valid": row[7],
+        "is_orphan_pool": row[8],
+        "notes": row[9],
     }
     
     # Get member cards with names
@@ -197,8 +193,12 @@ def update_community(
     params = []
     
     if archetype_name is not None:
+        # Reject blank or whitespace-only names
+        cleaned_name = archetype_name.strip() if archetype_name else ""
+        if not cleaned_name:
+            raise HTTPException(status_code=400, detail="Archetype name cannot be blank")
         updates.append("archetype_name = %s")
-        params.append(archetype_name if archetype_name else None)
+        params.append(cleaned_name)
     
     if is_valid is not None:
         updates.append("is_valid = %s")
@@ -513,7 +513,6 @@ def get_card_community_associations(
     query = """
         SELECT 
             cc.id,
-            cc.community_id,
             cc.archetype_name,
             cc.card_count,
             COUNT(DISTINCT ccm.card_blueprint) as connected_cards,
@@ -541,7 +540,7 @@ def get_card_community_associations(
         params.append(exclude_community_id)
     
     query += """
-        GROUP BY cc.id, cc.community_id, cc.archetype_name, cc.card_count
+        GROUP BY cc.id, cc.archetype_name, cc.card_count
         HAVING connected_cards >= 3
         ORDER BY avg_lift DESC
         LIMIT %s
@@ -555,12 +554,11 @@ def get_card_community_associations(
     for row in rows:
         communities.append({
             "id": row[0],
-            "community_id": row[1],
-            "archetype_name": row[2],
-            "card_count": row[3],
-            "connected_cards": row[4],
-            "avg_lift": round(row[5], 2) if row[5] else 0,
-            "max_lift": round(row[6], 2) if row[6] else 0,
+            "archetype_name": row[1],
+            "card_count": row[2],
+            "connected_cards": row[3],
+            "avg_lift": round(row[4], 2) if row[4] else 0,
+            "max_lift": round(row[5], 2) if row[5] else 0,
         })
     
     return {"blueprint": blueprint, "communities": communities}
@@ -578,7 +576,6 @@ def get_card_memberships(
     cursor.execute("""
         SELECT 
             cc.id,
-            cc.community_id,
             cc.archetype_name,
             cc.side,
             cc.is_orphan_pool,
@@ -595,13 +592,12 @@ def get_card_memberships(
     for row in cursor.fetchall():
         memberships.append({
             "community_id": row[0],
-            "community_num": row[1],
-            "archetype_name": row[2],
-            "side": row[3],
-            "is_orphan_pool": row[4],
-            "membership_score": row[5],
-            "is_core": row[6],
-            "membership_type": row[7],
+            "archetype_name": row[1],
+            "side": row[2],
+            "is_orphan_pool": row[3],
+            "membership_score": row[4],
+            "is_core": row[5],
+            "membership_type": row[6],
         })
     
     return {"blueprint": blueprint, "format_name": format_name, "memberships": memberships}

@@ -195,9 +195,9 @@ def get_or_create_orphan_pool(cursor, conn, format_name: str, side: str) -> int:
     # Create orphan pool
     cursor.execute("""
         INSERT INTO card_communities 
-            (format_name, side, community_id, card_count, avg_internal_lift, 
+            (format_name, side, card_count, avg_internal_lift, 
              archetype_name, is_valid, is_orphan_pool)
-        VALUES (%s, %s, -1, 0, 0, 'Orphaned Cards', TRUE, TRUE)
+        VALUES (%s, %s, 0, 0, 'Orphaned Cards', TRUE, TRUE)
     """, (format_name, side))
     conn.commit()
     
@@ -331,12 +331,13 @@ def insert_communities(
     
     # Insert each community
     for comm in community_stats:
-        # Insert community
+        # Insert community with default name based on Louvain cluster number
+        archetype_name = f"Archetype #{comm['community_id']}"
         cursor.execute("""
             INSERT INTO card_communities 
-                (format_name, side, community_id, card_count, avg_internal_lift)
+                (format_name, side, card_count, avg_internal_lift, archetype_name)
             VALUES (%s, %s, %s, %s, %s)
-        """, (format_name, side, comm['community_id'], comm['card_count'], comm['avg_internal_lift']))
+        """, (format_name, side, comm['card_count'], comm['avg_internal_lift'], archetype_name))
         
         db_community_id = cursor.lastrowid
         db_community_ids.append(db_community_id)

@@ -815,7 +815,7 @@
                      data-community-id="${c.id}"
                      onclick="selectCommunity(${c.id})">
                     <div class="name">
-                        ${c.is_orphan_pool ? '📦 ' : ''}${c.archetype_name || `Archetype #${c.community_id}`}
+                        ${c.is_orphan_pool ? '📦 ' : ''}${c.archetype_name || `Archetype #${c.id}`}
                         <span class="side-badge ${c.side}">${c.side === 'free_peoples' ? 'FP' : 'Shadow'}</span>
                     </div>
                     <div class="meta">
@@ -875,7 +875,7 @@
             detailEl.innerHTML = `
                 <div class="detail-header">
                     <div>
-                        <h2>${community.is_orphan_pool ? '📦 ' : ''}${community.archetype_name || `Archetype #${community.community_id}`}</h2>
+                        <h2>${community.is_orphan_pool ? '📦 ' : ''}${community.archetype_name || `Archetype #${community.id}`}</h2>
                         <div style="color: var(--text-secondary); font-size: 13px;">
                             ${community.side === 'free_peoples' ? 'Free Peoples' : 'Shadow'} · ${community.format_name}
                             ${community.is_orphan_pool ? ' · Orphan Pool' : ''}
@@ -1057,7 +1057,7 @@
         
         async function deleteAndReallocate(id) {
             const comm = communities.find(c => c.id === id);
-            const name = comm?.archetype_name || `Archetype #${comm?.community_id}`;
+            const name = comm?.archetype_name || `Archetype #${comm?.id}`;
             
             if (!confirm(`Delete "${name}" and reallocate its cards to other archetypes?\n\nCards will be moved to their best-fit archetype, or to the orphan pool if no clear fit exists.`)) {
                 return;
@@ -1187,7 +1187,7 @@
                 if (data.communities && data.communities.length > 0) {
                     listEl.innerHTML = data.communities.map(c => `
                         <div class="other-community-item" onclick="navigateToArchetype(${c.id})">
-                            <div class="oc-name">${c.archetype_name || `Archetype #${c.community_id}`}</div>
+                            <div class="oc-name">${c.archetype_name || `Archetype #${c.id}`}</div>
                             <div class="oc-meta">
                                 Avg lift: ${c.avg_lift} · ${c.connected_cards} connected cards
                             </div>
@@ -1224,7 +1224,7 @@
                         unrelatedSection.style.display = 'block';
                         unrelatedListEl.innerHTML = unrelatedComms.map(c => `
                             <div class="other-community-item" onclick="navigateToArchetype(${c.id})">
-                                <div class="oc-name">${c.archetype_name || `Archetype #${c.community_id}`}</div>
+                                <div class="oc-name">${c.archetype_name || `Archetype #${c.id}`}</div>
                                 <div class="oc-meta">
                                     ${c.card_count} cards
                                 </div>
