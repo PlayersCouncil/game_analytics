@@ -1141,8 +1141,8 @@
             let top = event.clientY - 50;
             
             // Get preview dimensions (estimate if not yet rendered)
-            const previewWidth = 208;  // 200px image + 8px padding
-            const previewHeight = 300; // approximate
+            const previewWidth = 408;  // 400px image + 8px padding
+            const previewHeight = 560; 
             
             // Check if it would go off the right edge
             if (left + previewWidth > window.innerWidth) {
@@ -1173,7 +1173,7 @@
             const cardItem = e.target.closest('.card-item');
             if (cardItem && cardItem.closest('#cardsGrid')) {
                 clearTimeout(hoverTimeout);
-                hoverTimeout = setTimeout(() => showCardHover(cardItem, e), 200);
+                hoverTimeout = setTimeout(() => showCardHover(cardItem, e), 50);
             }
         });
         
