@@ -347,6 +347,31 @@
                 </tbody>
             </table>
         </div>
+        
+        <!-- Archetype Detection -->
+        <div class="card">
+            <h2>Archetype Detection</h2>
+            <div id="archetypeMessage" class="message"></div>
+            <p style="color: var(--text-dim); font-size: 13px; margin-bottom: 15px;">
+                Runs Louvain community detection to identify card archetypes from correlation data.
+                <strong style="color: var(--warning);">Warning:</strong> This will delete all existing archetypes and rebuild from scratch.
+            </p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Resolution</label>
+                    <input type="text" id="archetypeResolution" value="7.5" style="width: 80px;" 
+                           title="Higher values = more granular communities (default: 7.5)">
+                </div>
+                <div class="form-group">
+                    <label>Format (optional)</label>
+                    <input type="text" id="archetypeFormat" placeholder="e.g., Fellowship Block" style="width: 200px;"
+                           title="Leave blank to process all formats">
+                </div>
+                <div class="form-group" style="justify-content: flex-end;">
+                    <button onclick="triggerArchetypeDetection()" class="secondary">Detect Archetypes</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -502,6 +527,34 @@
                 setTimeout(refreshStatus, 2000);
             })
             .catch(err => showMessage('opsMessage', err.message, true));
+        }
+        
+        function triggerArchetypeDetection() {
+            if (!confirm('This will DELETE all existing archetypes and rebuild from scratch. Continue?')) return;
+            
+            const resolution = parseFloat(document.getElementById('archetypeResolution').value) || 7.5;
+            const format = document.getElementById('archetypeFormat').value.trim();
+            
+            let url = `/api/admin/detect-archetypes?resolution=${resolution}`;
+            if (format) {
+                url += `&format_name=${encodeURIComponent(format)}`;
+            }
+            
+            fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Key': apiKey
+                }
+            })
+            .then(r => {
+                if (!r.ok) return r.json().then(e => { throw new Error(e.detail || 'Failed'); });
+                return r.json();
+            })
+            .then(data => {
+                showMessage('archetypeMessage', data.message + ' This may take a few minutes.');
+            })
+            .catch(err => showMessage('archetypeMessage', err.message, true));
         }
         
         function loadPatches() {

@@ -43,6 +43,14 @@ def run_catalog_rebuild():
     subprocess.run(cmd, check=True)
 
 
+def run_detect_archetypes(format_name: Optional[str] = None, resolution: float = 7.5):
+    """Run detect_archetypes.py in subprocess."""
+    cmd = [sys.executable, 'detect_archetypes.py', '--resolution', str(resolution)]
+    if format_name:
+        cmd.extend(['--format', format_name])
+    subprocess.run(cmd, check=True)
+
+
 def run_ingest(limit: int = 1000):
     """Run ingest.py in subprocess."""
     cmd = [sys.executable, 'ingest.py', '--limit', str(limit)]
@@ -152,3 +160,26 @@ def get_status(cursor = Depends(get_db_cursor)):
         total_card_stat_rows=total_stat_rows,
         latest_game_date=latest_date,
     )
+
+
+@router.post("/detect-archetypes", dependencies=[Depends(verify_admin_key)])
+def trigger_detect_archetypes(
+    background_tasks: BackgroundTasks,
+    format_name: Optional[str] = None,
+    resolution: float = 7.5,
+):
+    """
+    Trigger archetype detection using Louvain community detection.
+    
+    - **format_name**: Optional format to process (default: all formats)
+    - **resolution**: Louvain resolution parameter (default: 7.5, higher = more granular)
+    
+    WARNING: This will delete all existing archetypes and rebuild from scratch.
+    """
+    background_tasks.add_task(run_detect_archetypes, format_name, resolution)
+    
+    return {
+        "status": "started",
+        "message": f"Archetype detection started (resolution: {resolution})" + 
+                   (f" for format: {format_name}" if format_name else " for all formats")
+    }

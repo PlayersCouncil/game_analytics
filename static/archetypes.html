@@ -382,6 +382,25 @@
             border: 1px dashed var(--accent);
         }
         
+        /* Card hover preview */
+        .card-hover-preview {
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+            display: none;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            padding: 4px;
+        }
+        
+        .card-hover-preview img {
+            width: 400px;
+            height: auto;
+            border-radius: 6px;
+            display: block;
+        }
+        
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -712,6 +731,11 @@
         </div>
     </div>
     <div id="cardPanelOverlay" class="card-panel-overlay" onclick="closeCardPanel()"></div>
+    
+    <!-- Card hover preview -->
+    <div id="cardHoverPreview" class="card-hover-preview">
+        <img id="cardHoverImage" src="" alt="Card preview">
+    </div>
     
     <script>
         let currentCommunityId = null;
@@ -1087,12 +1111,94 @@
             }
         }
         
+        // Card hover preview
+        let hoverTimeout = null;
+        
+        function showCardHover(el, event) {
+            const preview = document.getElementById('cardHoverPreview');
+            const previewImg = document.getElementById('cardHoverImage');
+            
+            try {
+                const cardDataStr = el.getAttribute('data-card');
+                const card = JSON.parse(decodeURIComponent(cardDataStr));
+                const imageUrl = card.image_url || '/static/images/card-back.png';
+                
+                previewImg.src = imageUrl;
+                preview.style.display = 'block';
+                
+                positionCardHover(event);
+            } catch (e) {
+                console.error('Error showing card hover:', e);
+            }
+        }
+        
+        function positionCardHover(event) {
+            const preview = document.getElementById('cardHoverPreview');
+            const padding = 15;
+            
+            // Position to the right of cursor by default
+            let left = event.clientX + padding;
+            let top = event.clientY - 50;
+            
+            // Get preview dimensions (estimate if not yet rendered)
+            const previewWidth = 208;  // 200px image + 8px padding
+            const previewHeight = 300; // approximate
+            
+            // Check if it would go off the right edge
+            if (left + previewWidth > window.innerWidth) {
+                left = event.clientX - previewWidth - padding;
+            }
+            
+            // Check if it would go off the bottom
+            if (top + previewHeight > window.innerHeight) {
+                top = window.innerHeight - previewHeight - padding;
+            }
+            
+            // Don't go above viewport
+            if (top < padding) {
+                top = padding;
+            }
+            
+            preview.style.left = left + 'px';
+            preview.style.top = top + 'px';
+        }
+        
+        function hideCardHover() {
+            const preview = document.getElementById('cardHoverPreview');
+            preview.style.display = 'none';
+        }
+        
+        // Attach hover listeners to card grid (delegated)
+        document.addEventListener('mouseover', (e) => {
+            const cardItem = e.target.closest('.card-item');
+            if (cardItem && cardItem.closest('#cardsGrid')) {
+                clearTimeout(hoverTimeout);
+                hoverTimeout = setTimeout(() => showCardHover(cardItem, e), 200);
+            }
+        });
+        
+        document.addEventListener('mouseout', (e) => {
+            const cardItem = e.target.closest('.card-item');
+            if (cardItem) {
+                clearTimeout(hoverTimeout);
+                hideCardHover();
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            const preview = document.getElementById('cardHoverPreview');
+            if (preview.style.display === 'block') {
+                positionCardHover(e);
+            }
+        });
+        
         // Card panel handling
         let currentCardData = null;
         let currentCardCommunityId = null;
         let currentCardIsOrphan = false;
         
         function openCardPanelFromElement(el) {
+            hideCardHover();  // Hide hover when clicking
             const cardDataStr = el.getAttribute('data-card');
             const communityId = parseInt(el.getAttribute('data-community-id'));
             const isOrphan = el.getAttribute('data-is-orphan') === 'true';
