@@ -257,15 +257,15 @@ def delete_and_reallocate(
     if is_orphan_pool:
         raise HTTPException(status_code=400, detail="Cannot delete the orphan pool")
     
-    # Get cards from this community (only core cards - flex are just removed)
+    # Get cards from this community (core and custom cards - flex are just removed)
     cursor.execute("""
         SELECT card_blueprint FROM card_community_members 
-        WHERE community_id = %s AND membership_type = 'core'
+        WHERE community_id = %s AND membership_type IN ('core', 'custom')
     """, (community_id,))
     cards_to_reallocate = [row[0] for row in cursor.fetchall()]
     
     if not cards_to_reallocate:
-        # No core cards, just delete the community
+        # No core/custom cards, just delete the community
         cursor.execute("DELETE FROM card_community_members WHERE community_id = %s", (community_id,))
         cursor.execute("DELETE FROM card_communities WHERE id = %s", (community_id,))
         conn.commit()

@@ -662,7 +662,8 @@
         
         <div class="search-box" style="margin-left: 20px;">
             <input type="text" id="cardSearch" placeholder="Search card..." 
-                   style="padding: 6px 30px 6px 10px; border-radius: 4px; border: 1px solid var(--bg-tertiary); background: var(--bg-secondary); color: var(--text-primary); width: 180px;">
+                   style="padding: 6px 30px 6px 10px; border-radius: 4px; border: 1px solid var(--bg-tertiary); background: var(--bg-secondary); color: var(--text-primary); width: 180px;"
+                   onkeydown="if(event.key === 'Escape') { clearCardSearch(); }">
             <button class="search-clear" id="cardSearchClear" onclick="clearCardSearch()" style="display:none;">✕</button>
         </div>
         
@@ -1373,6 +1374,8 @@
             document.querySelectorAll('.community-item.search-highlight').forEach(el => {
                 el.classList.remove('search-highlight');
             });
+            // Also clear inner card name filter
+            clearCardNameFilter();
         }
         
         function clearCardNameFilter() {
