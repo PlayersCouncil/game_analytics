@@ -1316,6 +1316,7 @@
             handleCardSearch();
             updateCardSearchClearButton();
         });
+        document.getElementById('cardSearch').addEventListener('keydown', handleCardSearchKeydown);
         
         // Escape key closes card panel
         document.addEventListener('keydown', (e) => {
@@ -1392,7 +1393,9 @@
         
         // Card search in header
         let searchTimeout = null;
-        async function handleCardSearch() {
+        let lastSearchResults = null;  // Store results for Enter key navigation
+        
+        async function handleCardSearch(navigateOnSingleMatch = false) {
             const searchEl = document.getElementById('cardSearch');
             const query = searchEl.value.trim();
             
@@ -1400,6 +1403,9 @@
             document.querySelectorAll('.community-item.search-highlight').forEach(el => {
                 el.classList.remove('search-highlight');
             });
+            
+            // Clear stored results
+            lastSearchResults = null;
             
             // Wait for 3+ characters
             if (query.length < 3) return;
@@ -1416,30 +1422,48 @@
                     
                     if (!data.results || data.results.length === 0) return;
                     
-                    // Get unique community IDs (excluding orphan pools for auto-navigation)
-                    const nonOrphanResults = data.results.filter(r => !r.is_orphan_pool);
-                    const communityIds = [...new Set(nonOrphanResults.map(r => r.community_id))];
+                    // Store results for Enter key navigation
+                    lastSearchResults = data.results;
                     
-                    if (communityIds.length === 1) {
-                        // Exactly one archetype - navigate to it and set filter
-                        selectCommunity(communityIds[0]);
-                        // Set filter after a short delay to allow render
-                        setTimeout(() => setCardNameFilter(query), 100);
-                    } else if (nonOrphanResults.length === 1) {
-                        // Exactly one card - navigate and filter
-                        selectCommunity(nonOrphanResults[0].community_id);
-                        setTimeout(() => setCardNameFilter(query), 100);
-                    } else if (communityIds.length > 1) {
-                        // Multiple archetypes - highlight them all
-                        communityIds.forEach(commId => {
-                            const commEl = document.querySelector(`.community-item[data-community-id="${commId}"]`);
-                            if (commEl) commEl.classList.add('search-highlight');
-                        });
+                    // Get unique community IDs - separate orphan and non-orphan
+                    const nonOrphanResults = data.results.filter(r => !r.is_orphan_pool);
+                    const orphanResults = data.results.filter(r => r.is_orphan_pool);
+                    const nonOrphanCommunityIds = [...new Set(nonOrphanResults.map(r => r.community_id))];
+                    const orphanCommunityIds = [...new Set(orphanResults.map(r => r.community_id))];
+                    
+                    // Highlight all matching archetypes (including orphan pools)
+                    [...nonOrphanCommunityIds, ...orphanCommunityIds].forEach(commId => {
+                        const commEl = document.querySelector(`.community-item[data-community-id="${commId}"]`);
+                        if (commEl) commEl.classList.add('search-highlight');
+                    });
+                    
+                    // Only navigate if Enter was pressed
+                    if (navigateOnSingleMatch) {
+                        // Prefer non-orphan if available
+                        if (nonOrphanCommunityIds.length === 1) {
+                            selectCommunity(nonOrphanCommunityIds[0]);
+                            setTimeout(() => setCardNameFilter(query), 100);
+                        } else if (nonOrphanCommunityIds.length === 0 && orphanCommunityIds.length === 1) {
+                            // Only orphan pool matches - navigate to it
+                            selectCommunity(orphanCommunityIds[0]);
+                            setTimeout(() => setCardNameFilter(query), 100);
+                        }
+                        // If multiple matches, don't navigate (just leave highlights)
                     }
                 } catch (err) {
                     console.error('Card search failed:', err);
                 }
-            }, 300);
+            }, navigateOnSingleMatch ? 0 : 300);  // No debounce on Enter
+        }
+        
+        function handleCardSearchKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                // Cancel any pending debounced search
+                if (searchTimeout) clearTimeout(searchTimeout);
+                // Do immediate search with navigation enabled
+                handleCardSearch(true);
+            }
         }
         
         // Init

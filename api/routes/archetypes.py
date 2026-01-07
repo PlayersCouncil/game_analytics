@@ -354,11 +354,11 @@ def delete_and_reallocate(
                 # Already exists, just count as reallocated (will be removed from source)
                 reallocated += 1
             else:
-                # Add as flex card to best community
+                # Add as custom card to best community (manually reallocated)
                 cursor.execute("""
                     INSERT INTO card_community_members 
                         (community_id, card_blueprint, membership_score, is_core, membership_type)
-                    VALUES (%s, %s, %s, FALSE, 'flex')
+                    VALUES (%s, %s, %s, FALSE, 'custom')
                 """, (best_community, card_bp, min(best_score / 5.0, 1.0)))
                 reallocated += 1
         else:
@@ -644,11 +644,24 @@ def add_card_to_community(
     
     # Check if already a member
     cursor.execute("""
-        SELECT community_id FROM card_community_members 
+        SELECT community_id, membership_type FROM card_community_members 
         WHERE community_id = %s AND card_blueprint = %s
     """, (community_id, blueprint))
-    if cursor.fetchone():
-        raise HTTPException(status_code=400, detail="Card already in this community")
+    existing = cursor.fetchone()
+    
+    if existing:
+        # Already exists - update membership type if different
+        if existing[1] != membership_type:
+            cursor.execute("""
+                UPDATE card_community_members 
+                SET membership_type = %s
+                WHERE community_id = %s AND card_blueprint = %s
+            """, (membership_type, community_id, blueprint))
+            conn.commit()
+            return {"success": True, "membership_score": None, "updated": True}
+        else:
+            # Already exists with same type - just succeed
+            return {"success": True, "membership_score": None, "already_exists": True}
     
     # Calculate membership score based on correlations with community core cards
     cursor.execute("""
@@ -901,11 +914,12 @@ def search_cards_in_communities(
     Search for cards by name within a format and return which communities they belong to.
     
     Returns cards matching the query and their core community membership.
+    Case-insensitive and accent-insensitive search.
     """
-    # Normalize query for accent-agnostic search
     search_term = f"%{query}%"
     
     # Find cards matching the query that are core members of communities in this format
+    # Use COLLATE for case and accent insensitive search
     cursor.execute("""
         SELECT DISTINCT
             cat.blueprint,
@@ -920,7 +934,7 @@ def search_cards_in_communities(
         WHERE cc.format_name = %s
           AND cc.is_valid = TRUE
           AND ccm.membership_type = 'core'
-          AND cat.card_name LIKE %s
+          AND cat.card_name COLLATE utf8mb4_unicode_ci LIKE %s COLLATE utf8mb4_unicode_ci
         ORDER BY cat.card_name
         LIMIT 50
     """, (format_name, search_term))
