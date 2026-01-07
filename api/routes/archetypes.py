@@ -934,7 +934,7 @@ def search_cards_in_communities(
         WHERE cc.format_name = %s
           AND cc.is_valid = TRUE
           AND ccm.membership_type = 'core'
-          AND cat.card_name COLLATE utf8mb4_unicode_ci LIKE %s COLLATE utf8mb4_unicode_ci
+          AND cat.card_name COLLATE utf8_unicode_ci LIKE %s COLLATE utf8_unicode_ci
         ORDER BY cat.card_name
         LIMIT 50
     """, (format_name, search_term))
