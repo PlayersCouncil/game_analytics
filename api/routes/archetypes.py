@@ -304,6 +304,9 @@ def delete_and_reallocate(
         """, (format_name, side))
         orphan_pool_id = cursor.lastrowid
     
+    # Use same threshold as detect_archetypes.py for flex cards
+    MIN_AVG_LIFT = 2.0
+    
     reallocated = 0
     orphaned = 0
     
@@ -326,7 +329,7 @@ def delete_and_reallocate(
                 continue
             lifts = [card_correlations.get(core_card, 0) for core_card in core_cards]
             avg_lift = sum(lifts) / len(lifts) if lifts else 0
-            if avg_lift > 0:
+            if avg_lift >= MIN_AVG_LIFT:
                 community_scores[comm_id] = avg_lift
         
         # Find best fit with 15% margin
