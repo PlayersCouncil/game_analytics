@@ -16,7 +16,7 @@ Algorithm:
 Card membership types:
 - 'core': Cards assigned to this community by Louvain
 - 'flex': Cards that correlate strongly with core members but belong elsewhere
-- 'custom': Cards manually assigned by users (preserved across runs)
+- 'custom': Cards manually assigned/reallocated by users
 
 Usage:
     python detect_archetypes.py                           # All formats
@@ -235,7 +235,7 @@ def update_orphan_pool(
     # Clear existing orphan pool members (they'll be re-evaluated)
     cursor.execute("""
         DELETE FROM card_community_members 
-        WHERE community_id = %s AND membership_type = 'core'
+        WHERE community_id = %s
     """, (orphan_pool_id,))
     
     # Add orphaned cards
@@ -310,20 +310,16 @@ def insert_communities(
                 logger.info(f"    {card} ({name}): score={score:.2f}")
         return []
     
-    # Clear existing communities for this format/side (only core/flex, preserve custom)
+    # Clear existing communities for this format/side (all members including custom)
     cursor.execute("""
         DELETE ccm FROM card_community_members ccm
         JOIN card_communities cc ON ccm.community_id = cc.id
-        WHERE cc.format_name = %s AND cc.side = %s AND ccm.membership_type IN ('core', 'flex')
+        WHERE cc.format_name = %s AND cc.side = %s AND cc.is_orphan_pool = FALSE
     """, (format_name, side))
     
     cursor.execute("""
-        DELETE cc FROM card_communities cc
-        WHERE cc.format_name = %s AND cc.side = %s
-          AND NOT EXISTS (
-              SELECT 1 FROM card_community_members ccm 
-              WHERE ccm.community_id = cc.id
-          )
+        DELETE FROM card_communities 
+        WHERE format_name = %s AND side = %s AND is_orphan_pool = FALSE
     """, (format_name, side))
     conn.commit()
     
