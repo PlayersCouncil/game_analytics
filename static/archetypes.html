@@ -277,31 +277,6 @@
             background: #FFC107;  /* Yellow/amber for flex */
         }
         
-        .card-separator {
-            grid-column: 1 / -1;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            padding: 15px 0;
-            margin: 10px 0;
-        }
-        
-        .card-separator::before,
-        .card-separator::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--bg-tertiary);
-        }
-        
-        .card-separator span {
-            color: var(--text-secondary);
-            font-size: 12px;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
         .card-item.flex {
             opacity: 0.85;
         }
@@ -533,7 +508,13 @@
             const side = document.getElementById('sideFilter').value;
             const showInvalid = document.getElementById('showInvalid').checked;
             
+            // Clear current selection
+            currentCommunityId = null;
+            document.getElementById('communityDetail').innerHTML = 
+                '<div class="empty-state">Select a community to view details</div>';
+            
             const listEl = document.getElementById('communityList');
+            listEl.innerHTML = '<div class="loading">Loading...</div>';
             
             try {
                 let url = `/api/communities?format_name=${encodeURIComponent(format)}`;
@@ -631,7 +612,8 @@
                     <div class="detail-actions">
                         <input type="text" class="name-input" id="archetypeName" 
                                placeholder="Archetype name..." 
-                               value="${community.archetype_name || ''}">
+                               value="${community.archetype_name || ''}"
+                               onkeydown="if(event.key === 'Enter') saveName(${community.id})">
                         <button onclick="saveName(${community.id})" class="success">Save Name</button>
                         <button onclick="toggleValid(${community.id}, ${!community.is_valid})" 
                                 class="${community.is_valid ? 'warning' : 'success'}">
@@ -669,16 +651,23 @@
                 <h3>Cards (sorted by centrality)</h3>
                 <div class="cards-grid">
                     ${(() => {
+                        // Sort: core first, then custom, then flex - each group by score
                         const coreCards = community.members.filter(c => c.membership_type === 'core' || !c.membership_type);
                         const customCards = community.members.filter(c => c.membership_type === 'custom');
                         const flexCards = community.members.filter(c => c.membership_type === 'flex');
+                        const allCards = [...coreCards, ...customCards, ...flexCards];
                         
-                        let html = '';
-                        
-                        // Render core cards
-                        coreCards.forEach(card => {
-                            html += `
-                                <div class="card-item core"
+                        return allCards.map(card => {
+                            const typeClass = card.membership_type === 'flex' ? 'flex' : 
+                                            card.membership_type === 'custom' ? 'custom' : 'core';
+                            const scoreClass = card.membership_type === 'flex' ? 'score-flex' :
+                                             card.membership_type === 'custom' ? 'score-custom' : 'score-core';
+                            const icon = card.membership_type === 'flex' ? '↔' :
+                                        card.membership_type === 'custom' ? '📝' :
+                                        (card.is_core ? '⭐' : '');
+                            
+                            return `
+                                <div class="card-item ${typeClass}"
                                      onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
                                      onmousemove="moveHover(event)"
                                      onmouseleave="hideHover()">
@@ -691,66 +680,12 @@
                                         </div>
                                         <div class="card-meta">
                                             ${card.culture || ''} ${card.card_type || ''}
-                                            ${card.is_core ? '⭐' : ''}
+                                            ${icon}
                                         </div>
                                     </div>
-                                    <div class="score-bar score-core" style="width: ${card.membership_score * 100}%"></div>
+                                    <div class="score-bar ${scoreClass}" style="width: ${card.membership_score * 100}%"></div>
                                 </div>`;
-                        });
-                        
-                        // Render custom cards (if any)
-                        if (customCards.length > 0) {
-                            html += '<div class="card-separator"><span>Custom Cards</span></div>';
-                            customCards.forEach(card => {
-                                html += `
-                                    <div class="card-item custom"
-                                         onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
-                                         onmousemove="moveHover(event)"
-                                         onmouseleave="hideHover()">
-                                        <img src="${card.image_url || '/static/images/card-back.png'}" 
-                                             alt="${card.name || card.blueprint}"
-                                             onerror="this.src='/static/images/card-back.png'">
-                                        <div class="card-info">
-                                            <div class="card-name" title="${card.name || card.blueprint}">
-                                                ${card.name || card.blueprint}
-                                            </div>
-                                            <div class="card-meta">
-                                                ${card.culture || ''} ${card.card_type || ''}
-                                                📝
-                                            </div>
-                                        </div>
-                                        <div class="score-bar score-custom" style="width: ${card.membership_score * 100}%"></div>
-                                    </div>`;
-                            });
-                        }
-                        
-                        // Render flex cards (if any)
-                        if (flexCards.length > 0) {
-                            html += '<div class="card-separator"><span>Flex Cards</span></div>';
-                            flexCards.forEach(card => {
-                                html += `
-                                    <div class="card-item flex"
-                                         onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
-                                         onmousemove="moveHover(event)"
-                                         onmouseleave="hideHover()">
-                                        <img src="${card.image_url || '/static/images/card-back.png'}" 
-                                             alt="${card.name || card.blueprint}"
-                                             onerror="this.src='/static/images/card-back.png'">
-                                        <div class="card-info">
-                                            <div class="card-name" title="${card.name || card.blueprint}">
-                                                ${card.name || card.blueprint}
-                                            </div>
-                                            <div class="card-meta">
-                                                ${card.culture || ''} ${card.card_type || ''}
-                                                ↔
-                                            </div>
-                                        </div>
-                                        <div class="score-bar score-flex" style="width: ${card.membership_score * 100}%"></div>
-                                    </div>`;
-                            });
-                        }
-                        
-                        return html;
+                        }).join('');
                     })()}
                 </div>
                 
