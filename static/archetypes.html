@@ -265,6 +265,51 @@
             border-radius: 0 0 6px 6px;
         }
         
+        .score-bar.score-core {
+            background: #4CAF50;  /* Green for core */
+        }
+        
+        .score-bar.score-custom {
+            background: #9C27B0;  /* Purple for custom */
+        }
+        
+        .score-bar.score-flex {
+            background: #FFC107;  /* Yellow/amber for flex */
+        }
+        
+        .card-separator {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 0;
+            margin: 10px 0;
+        }
+        
+        .card-separator::before,
+        .card-separator::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--bg-tertiary);
+        }
+        
+        .card-separator span {
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .card-item.flex {
+            opacity: 0.85;
+        }
+        
+        .card-item.custom {
+            border: 1px dashed var(--accent);
+        }
+        
         .empty-state {
             text-align: center;
             padding: 60px 20px;
@@ -565,7 +610,9 @@
                 .join('');
             
             // Core vs flex counts
-            const coreCount = community.members.filter(m => m.is_core).length;
+            const coreCount = community.members.filter(m => m.membership_type === 'core' || !m.membership_type).length;
+            const flexCount = community.members.filter(m => m.membership_type === 'flex').length;
+            const customCount = community.members.filter(m => m.membership_type === 'custom').length;
             
             detailEl.innerHTML = `
                 <div class="detail-header">
@@ -596,6 +643,12 @@
                         <div class="stat-value">${coreCount}</div>
                         <div class="stat-label">Core Cards</div>
                     </div>
+                    ${flexCount > 0 ? `
+                    <div class="stat">
+                        <div class="stat-value">${flexCount}</div>
+                        <div class="stat-label">Flex Cards</div>
+                    </div>
+                    ` : ''}
                     <div class="stat">
                         <div class="stat-value">${community.avg_internal_lift?.toFixed(1) || '?'}</div>
                         <div class="stat-label">Avg Lift</div>
@@ -609,26 +662,90 @@
                 
                 <h3>Cards (sorted by centrality)</h3>
                 <div class="cards-grid">
-                    ${community.members.map(card => `
-                        <div class="card-item ${card.is_core ? 'core' : ''}"
-                             onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
-                             onmousemove="moveHover(event)"
-                             onmouseleave="hideHover()">
-                            <img src="${card.image_url || '/static/images/card-back.png'}" 
-                                 alt="${card.name || card.blueprint}"
-                                 onerror="this.src='/static/images/card-back.png'">
-                            <div class="card-info">
-                                <div class="card-name" title="${card.name || card.blueprint}">
-                                    ${card.name || card.blueprint}
-                                </div>
-                                <div class="card-meta">
-                                    ${card.culture || ''} ${card.card_type || ''}
-                                    ${card.is_core ? '⭐' : ''}
-                                </div>
-                            </div>
-                            <div class="score-bar" style="width: ${card.membership_score * 100}%"></div>
-                        </div>
-                    `).join('')}
+                    ${(() => {
+                        const coreCards = community.members.filter(c => c.membership_type === 'core' || !c.membership_type);
+                        const customCards = community.members.filter(c => c.membership_type === 'custom');
+                        const flexCards = community.members.filter(c => c.membership_type === 'flex');
+                        
+                        let html = '';
+                        
+                        // Render core cards
+                        coreCards.forEach(card => {
+                            html += `
+                                <div class="card-item core"
+                                     onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
+                                     onmousemove="moveHover(event)"
+                                     onmouseleave="hideHover()">
+                                    <img src="${card.image_url || '/static/images/card-back.png'}" 
+                                         alt="${card.name || card.blueprint}"
+                                         onerror="this.src='/static/images/card-back.png'">
+                                    <div class="card-info">
+                                        <div class="card-name" title="${card.name || card.blueprint}">
+                                            ${card.name || card.blueprint}
+                                        </div>
+                                        <div class="card-meta">
+                                            ${card.culture || ''} ${card.card_type || ''}
+                                            ${card.is_core ? '⭐' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="score-bar score-core" style="width: ${card.membership_score * 100}%"></div>
+                                </div>`;
+                        });
+                        
+                        // Render custom cards (if any)
+                        if (customCards.length > 0) {
+                            html += '<div class="card-separator"><span>Custom Cards</span></div>';
+                            customCards.forEach(card => {
+                                html += `
+                                    <div class="card-item custom"
+                                         onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
+                                         onmousemove="moveHover(event)"
+                                         onmouseleave="hideHover()">
+                                        <img src="${card.image_url || '/static/images/card-back.png'}" 
+                                             alt="${card.name || card.blueprint}"
+                                             onerror="this.src='/static/images/card-back.png'">
+                                        <div class="card-info">
+                                            <div class="card-name" title="${card.name || card.blueprint}">
+                                                ${card.name || card.blueprint}
+                                            </div>
+                                            <div class="card-meta">
+                                                ${card.culture || ''} ${card.card_type || ''}
+                                                📝
+                                            </div>
+                                        </div>
+                                        <div class="score-bar score-custom" style="width: ${card.membership_score * 100}%"></div>
+                                    </div>`;
+                            });
+                        }
+                        
+                        // Render flex cards (if any)
+                        if (flexCards.length > 0) {
+                            html += '<div class="card-separator"><span>Flex Cards</span></div>';
+                            flexCards.forEach(card => {
+                                html += `
+                                    <div class="card-item flex"
+                                         onmouseenter="showHover(event, '${card.image_url || ''}', '${card.blueprint}')"
+                                         onmousemove="moveHover(event)"
+                                         onmouseleave="hideHover()">
+                                        <img src="${card.image_url || '/static/images/card-back.png'}" 
+                                             alt="${card.name || card.blueprint}"
+                                             onerror="this.src='/static/images/card-back.png'">
+                                        <div class="card-info">
+                                            <div class="card-name" title="${card.name || card.blueprint}">
+                                                ${card.name || card.blueprint}
+                                            </div>
+                                            <div class="card-meta">
+                                                ${card.culture || ''} ${card.card_type || ''}
+                                                ↔
+                                            </div>
+                                        </div>
+                                        <div class="score-bar score-flex" style="width: ${card.membership_score * 100}%"></div>
+                                    </div>`;
+                            });
+                        }
+                        
+                        return html;
+                    })()}
                 </div>
                 
                 <div class="notes-section">
