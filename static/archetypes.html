@@ -284,12 +284,43 @@
         }
         
         .cards-header input {
-            padding: 6px 10px;
+            padding: 6px 30px 6px 10px;
             border-radius: 4px;
             border: 1px solid var(--bg-tertiary);
             background: var(--bg-secondary);
             color: var(--text-primary);
             width: 200px;
+        }
+        
+        .search-box {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .search-box input {
+            padding-right: 30px;
+        }
+        
+        .search-clear {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            cursor: pointer;
+            padding: 2px 6px;
+            line-height: 1;
+        }
+        
+        .search-clear:hover {
+            color: var(--text-primary);
+        }
+        
+        .cards-header .search-box {
+            position: relative;
         }
         
         .card-item.core {
@@ -629,8 +660,11 @@
         
         <button onclick="loadCommunities()" class="secondary">Refresh</button>
         
-        <input type="text" id="cardSearch" placeholder="Search card..." 
-               style="margin-left: 20px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--bg-tertiary); background: var(--bg-secondary); color: var(--text-primary); width: 180px;">
+        <div class="search-box" style="margin-left: 20px;">
+            <input type="text" id="cardSearch" placeholder="Search card..." 
+                   style="padding: 6px 30px 6px 10px; border-radius: 4px; border: 1px solid var(--bg-tertiary); background: var(--bg-secondary); color: var(--text-primary); width: 180px;">
+            <button class="search-clear" id="cardSearchClear" onclick="clearCardSearch()" style="display:none;">✕</button>
+        </div>
         
         <nav class="header-links" style="margin-left: auto;">
             <a href="/">Home</a>
@@ -669,6 +703,10 @@
             <div class="card-panel-communities" id="cardPanelCommunities">
                 <h4>Other Archetypes</h4>
                 <div id="otherCommunitiesList">Loading...</div>
+            </div>
+            <div class="card-panel-communities" id="cardPanelUnrelated" style="display:none;">
+                <h4>Unrelated Archetypes</h4>
+                <div id="unrelatedCommunitiesList"></div>
             </div>
         </div>
     </div>
@@ -865,8 +903,11 @@
                 
                 <div class="cards-header">
                     <h3>Cards (sorted by centrality)</h3>
-                    <input type="text" id="cardNameFilter" placeholder="Filter cards..." 
-                           oninput="filterCards()" onkeydown="if(event.key === 'Escape') { this.value=''; filterCards(); }">
+                    <div class="search-box">
+                        <input type="text" id="cardNameFilter" placeholder="Filter cards..." 
+                               oninput="filterCards(); updateFilterClearButton();" onkeydown="if(event.key === 'Escape') { clearCardNameFilter(); }">
+                        <button class="search-clear" id="cardNameFilterClear" onclick="clearCardNameFilter()" style="display:none;">✕</button>
+                    </div>
                 </div>
                 <div class="cards-grid" id="cardsGrid">
                     ${(() => {
@@ -902,12 +943,15 @@
                             
                             return '<div class="card-item ' + typeClass + '"' +
                                 ' data-name="' + normalizedName + '"' +
-                                ' onclick="openCardPanel(\'' + cardDataStr + '\', ' + community.id + ', ' + (community.is_orphan_pool || false) + ')">' +
+                                ' data-card="' + cardDataStr + '"' +
+                                ' data-community-id="' + community.id + '"' +
+                                ' data-is-orphan="' + (community.is_orphan_pool || false) + '"' +
+                                ' onclick="openCardPanelFromElement(this)">' +
                                 '<img src="' + (card.image_url || '/static/images/card-back.png') + '"' +
-                                ' alt="' + (card.name || card.blueprint) + '"' +
+                                ' alt="' + (card.name || card.blueprint).replace(/"/g, '&quot;') + '"' +
                                 ' onerror="this.src=\'/static/images/card-back.png\'">' +
                                 '<div class="card-info">' +
-                                    '<div class="card-name" title="' + (card.name || card.blueprint) + '">' +
+                                    '<div class="card-name" title="' + (card.name || card.blueprint).replace(/"/g, '&quot;') + '">' +
                                         (card.name || card.blueprint) +
                                     '</div>' +
                                     '<div class="card-meta">' +
@@ -1022,6 +1066,13 @@
         let currentCardCommunityId = null;
         let currentCardIsOrphan = false;
         
+        function openCardPanelFromElement(el) {
+            const cardDataStr = el.getAttribute('data-card');
+            const communityId = parseInt(el.getAttribute('data-community-id'));
+            const isOrphan = el.getAttribute('data-is-orphan') === 'true';
+            openCardPanel(cardDataStr, communityId, isOrphan);
+        }
+        
         function openCardPanel(cardDataStr, communityId, isOrphan) {
             const card = JSON.parse(decodeURIComponent(cardDataStr));
             currentCardData = card;
@@ -1069,7 +1120,7 @@
             }
             
             // Load other communities
-            loadOtherCommunities(card.blueprint, communityId);
+            loadOtherCommunities(card.blueprint, communityId, isOrphan);
             
             // Show panel
             document.getElementById('cardPanel').classList.add('open');
@@ -1088,9 +1139,15 @@
             selectCommunity(communityId);
         }
         
-        async function loadOtherCommunities(blueprint, excludeCommunityId) {
+        async function loadOtherCommunities(blueprint, excludeCommunityId, isOrphan = false) {
             const listEl = document.getElementById('otherCommunitiesList');
+            const unrelatedSection = document.getElementById('cardPanelUnrelated');
+            const unrelatedListEl = document.getElementById('unrelatedCommunitiesList');
+            
             listEl.innerHTML = '<div class="loading">Loading...</div>';
+            
+            // Hide unrelated section by default
+            unrelatedSection.style.display = 'none';
             
             try {
                 const format = document.getElementById('formatSelect').value;
@@ -1098,6 +1155,9 @@
                 
                 const resp = await fetch(url);
                 const data = await resp.json();
+                
+                const relatedCommunityIds = new Set(data.communities?.map(c => c.id) || []);
+                relatedCommunityIds.add(excludeCommunityId);
                 
                 if (data.communities && data.communities.length > 0) {
                     listEl.innerHTML = data.communities.map(c => `
@@ -1108,14 +1168,48 @@
                             </div>
                             ${isAdmin ? `
                             <div class="oc-actions" onclick="event.stopPropagation()">
-                                <button onclick="moveCardToCommunity(${c.id})" class="success">Move Here</button>
-                                <button onclick="addCardToCommunity(${c.id})" class="secondary">Add as Flex</button>
+                                <button onclick="moveCardToCommunity(${c.id}, ${isOrphan})" class="success">Move Here</button>
+                                <button onclick="addCardToCommunity(${c.id}, ${isOrphan})" class="secondary">Add as Flex</button>
                             </div>
                             ` : ''}
                         </div>
                     `).join('');
                 } else {
                     listEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 13px;">No other matching archetypes found</div>';
+                }
+                
+                // For orphan cards, also load unrelated archetypes
+                if (isOrphan && isAdmin) {
+                    // Get all non-orphan communities for this format/side
+                    const card = currentCardData;
+                    const allCommunitiesUrl = `/api/communities?format_name=${encodeURIComponent(format)}&side=${card.culture ? '' : ''}`; 
+                    // Get the side from the current community or card
+                    const currentComm = communities.find(c => c.id === excludeCommunityId);
+                    const side = currentComm?.side || '';
+                    
+                    const allResp = await fetch(`/api/communities?format_name=${encodeURIComponent(format)}${side ? `&side=${side}` : ''}`);
+                    const allData = await allResp.json();
+                    
+                    // Filter to non-orphan communities not in related list
+                    const unrelatedComms = (allData.communities || []).filter(c => 
+                        !c.is_orphan_pool && !relatedCommunityIds.has(c.id)
+                    );
+                    
+                    if (unrelatedComms.length > 0) {
+                        unrelatedSection.style.display = 'block';
+                        unrelatedListEl.innerHTML = unrelatedComms.map(c => `
+                            <div class="other-community-item" onclick="navigateToArchetype(${c.id})">
+                                <div class="oc-name">${c.archetype_name || `Archetype #${c.community_id}`}</div>
+                                <div class="oc-meta">
+                                    ${c.card_count} cards
+                                </div>
+                                <div class="oc-actions" onclick="event.stopPropagation()">
+                                    <button onclick="moveCardToCommunity(${c.id}, true)" class="success">Move Here</button>
+                                    <button onclick="addCardToCommunity(${c.id}, true)" class="secondary">Add as Flex</button>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
                 }
             } catch (err) {
                 console.error('Failed to load other communities:', err);
@@ -1126,9 +1220,9 @@
         async function removeCardFromCommunity() {
             if (!currentCardData || !currentCardCommunityId) return;
             
-            const willOrphan = currentCardData.membership_type === 'core' && !currentCardIsOrphan;
-            const msg = willOrphan 
-                ? `Remove "${currentCardData.name}" from this archetype? It will be moved to the orphan pool.`
+            const isCore = currentCardData.membership_type === 'core';
+            const msg = isCore 
+                ? `Remove "${currentCardData.name}" from this archetype? It will be moved to the orphan pool and kept as a flex card here.`
                 : `Remove "${currentCardData.name}" from this archetype?`;
             
             if (!confirm(msg)) return;
@@ -1144,19 +1238,27 @@
                 }
                 const result = await resp.json();
                 
+                // If it was a core card, auto-add it back as flex
+                if (isCore && result.moved_to_orphan) {
+                    try {
+                        await fetch(
+                            `/api/communities/${currentCardCommunityId}/cards/${encodeURIComponent(currentCardData.blueprint)}?membership_type=flex`,
+                            { method: 'POST', headers: getAdminHeaders() }
+                        );
+                    } catch (flexErr) {
+                        console.error('Failed to add as flex:', flexErr);
+                    }
+                }
+                
                 closeCardPanel();
                 selectCommunity(currentCommunityId); // Refresh current community
-                
-                if (result.moved_to_orphan) {
-                    alert('Card moved to orphan pool');
-                }
             } catch (err) {
                 console.error('Failed to remove card:', err);
                 alert('Failed to remove: ' + err.message);
             }
         }
         
-        async function addCardToCommunity(targetCommunityId) {
+        async function addCardToCommunity(targetCommunityId, skipPrompt = false) {
             if (!currentCardData) return;
             
             try {
@@ -1169,19 +1271,21 @@
                     throw new Error(err.detail || 'Failed');
                 }
                 
-                alert('Card added as flex to archetype');
+                if (!skipPrompt) {
+                    alert('Card added as flex to archetype');
+                }
                 // Refresh other communities list
-                loadOtherCommunities(currentCardData.blueprint, currentCardCommunityId);
+                loadOtherCommunities(currentCardData.blueprint, currentCardCommunityId, currentCardIsOrphan);
             } catch (err) {
                 console.error('Failed to add card:', err);
                 alert('Failed to add: ' + err.message);
             }
         }
         
-        async function moveCardToCommunity(targetCommunityId) {
+        async function moveCardToCommunity(targetCommunityId, skipPrompt = false) {
             if (!currentCardData || !currentCardCommunityId) return;
             
-            if (!confirm(`Move "${currentCardData.name}" to this archetype?`)) return;
+            if (!skipPrompt && !confirm(`Move "${currentCardData.name}" to this archetype?`)) return;
             
             try {
                 const resp = await fetch(
@@ -1195,7 +1299,9 @@
                 
                 closeCardPanel();
                 selectCommunity(currentCommunityId); // Refresh current community
-                alert('Card moved to archetype');
+                if (!skipPrompt) {
+                    alert('Card moved to archetype');
+                }
             } catch (err) {
                 console.error('Failed to move card:', err);
                 alert('Failed to move: ' + err.message);
@@ -1206,7 +1312,51 @@
         document.getElementById('formatSelect').addEventListener('change', loadCommunities);
         document.getElementById('sideFilter').addEventListener('change', loadCommunities);
         document.getElementById('showInvalid').addEventListener('change', loadCommunities);
-        document.getElementById('cardSearch').addEventListener('input', handleCardSearch);
+        document.getElementById('cardSearch').addEventListener('input', function() {
+            handleCardSearch();
+            updateCardSearchClearButton();
+        });
+        
+        // Escape key closes card panel
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeCardPanel();
+        });
+        
+        // Clear button visibility handlers
+        function updateCardSearchClearButton() {
+            const input = document.getElementById('cardSearch');
+            const clearBtn = document.getElementById('cardSearchClear');
+            if (clearBtn) {
+                clearBtn.style.display = input.value ? 'block' : 'none';
+            }
+        }
+        
+        function updateFilterClearButton() {
+            const input = document.getElementById('cardNameFilter');
+            const clearBtn = document.getElementById('cardNameFilterClear');
+            if (clearBtn) {
+                clearBtn.style.display = input.value ? 'block' : 'none';
+            }
+        }
+        
+        function clearCardSearch() {
+            const input = document.getElementById('cardSearch');
+            input.value = '';
+            updateCardSearchClearButton();
+            // Clear highlights
+            document.querySelectorAll('.community-item.search-highlight').forEach(el => {
+                el.classList.remove('search-highlight');
+            });
+        }
+        
+        function clearCardNameFilter() {
+            const input = document.getElementById('cardNameFilter');
+            if (input) {
+                input.value = '';
+                filterCards();
+                updateFilterClearButton();
+            }
+        }
         
         // Escape key closes card panel
         document.addEventListener('keydown', (e) => {

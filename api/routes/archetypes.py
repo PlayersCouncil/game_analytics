@@ -818,7 +818,7 @@ def move_card_to_community(
     
     # Check if already in target
     cursor.execute("""
-        SELECT id FROM card_community_members 
+        SELECT community_id FROM card_community_members 
         WHERE community_id = %s AND card_blueprint = %s
     """, (target_community_id, blueprint))
     if cursor.fetchone():
