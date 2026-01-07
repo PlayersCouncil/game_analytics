@@ -1344,11 +1344,6 @@
         });
         document.getElementById('cardSearch').addEventListener('keydown', handleCardSearchKeydown);
         
-        // Escape key closes card panel
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeCardPanel();
-        });
-        
         // Clear button visibility handlers
         function updateCardSearchClearButton() {
             const input = document.getElementById('cardSearch');
@@ -1387,9 +1382,18 @@
             }
         }
         
-        // Escape key closes card panel
+        // Global escape key handler
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeCardPanel();
+            if (e.key === 'Escape') {
+                // If card panel is open, close it first
+                const cardPanel = document.getElementById('cardPanel');
+                if (cardPanel && cardPanel.classList.contains('open')) {
+                    closeCardPanel();
+                } else {
+                    // Otherwise clear both search boxes
+                    clearCardSearch();  // This also clears inner filter
+                }
+            }
         });
         
         // Card name filter in archetype detail
@@ -1416,6 +1420,7 @@
             if (filterEl) {
                 filterEl.value = value;
                 filterCards();
+                updateFilterClearButton();
             }
         }
         
