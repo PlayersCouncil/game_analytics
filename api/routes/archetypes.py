@@ -347,7 +347,7 @@ def delete_and_reallocate(
         if best_community:
             # Check if already a member of target community
             cursor.execute("""
-                SELECT id FROM card_community_members 
+                SELECT community_id FROM card_community_members 
                 WHERE community_id = %s AND card_blueprint = %s
             """, (best_community, card_bp))
             if cursor.fetchone():
@@ -364,7 +364,7 @@ def delete_and_reallocate(
         else:
             # Check if already in orphan pool
             cursor.execute("""
-                SELECT id FROM card_community_members 
+                SELECT community_id FROM card_community_members 
                 WHERE community_id = %s AND card_blueprint = %s
             """, (orphan_pool_id, card_bp))
             if not cursor.fetchone():
@@ -644,7 +644,7 @@ def add_card_to_community(
     
     # Check if already a member
     cursor.execute("""
-        SELECT id FROM card_community_members 
+        SELECT community_id FROM card_community_members 
         WHERE community_id = %s AND card_blueprint = %s
     """, (community_id, blueprint))
     if cursor.fetchone():
