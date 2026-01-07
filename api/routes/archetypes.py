@@ -273,7 +273,7 @@ def delete_and_reallocate(
     
     # Get other communities for this format/side (excluding orphan pool for now)
     cursor.execute("""
-        SELECT id, community_id FROM card_communities 
+        SELECT id FROM card_communities 
         WHERE format_name = %s AND side = %s AND id != %s AND is_orphan_pool = FALSE
     """, (format_name, side, community_id))
     other_communities = {row[0]: row[1] for row in cursor.fetchall()}
@@ -298,7 +298,7 @@ def delete_and_reallocate(
     else:
         cursor.execute("""
             INSERT INTO card_communities 
-                (format_name, side, community_id, card_count, avg_internal_lift, 
+                (format_name, side, card_count, avg_internal_lift, 
                  archetype_name, is_valid, is_orphan_pool)
             VALUES (%s, %s, -1, 0, 0, 'Orphaned Cards', TRUE, TRUE)
         """, (format_name, side))
