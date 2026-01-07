@@ -594,11 +594,11 @@
     
     <div class="main-layout">
         <div class="community-list" id="communityList">
-            <div class="empty-state">Select a format to view communities</div>
+            <div class="empty-state">Select a format to view archetypes</div>
         </div>
         
         <div class="community-detail" id="communityDetail">
-            <div class="empty-state">Select a community to view details</div>
+            <div class="empty-state">Select an archetype to view details</div>
         </div>
     </div>
     
@@ -669,7 +669,7 @@
             // Clear current selection
             currentCommunityId = null;
             document.getElementById('communityDetail').innerHTML = 
-                '<div class="empty-state">Select a community to view details</div>';
+                '<div class="empty-state">Select an archetype to view details</div>';
             
             const listEl = document.getElementById('communityList');
             listEl.innerHTML = '<div class="loading">Loading...</div>';
@@ -951,7 +951,7 @@
                 // Refresh and clear selection
                 currentCommunityId = null;
                 document.getElementById('communityDetail').innerHTML = 
-                    '<div class="empty-state">Select a community to view details</div>';
+                    '<div class="empty-state">Select an archetype to view details</div>';
                 loadCommunities();
             } catch (err) {
                 console.error('Failed to delete:', err);
