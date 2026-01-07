@@ -345,20 +345,35 @@ def delete_and_reallocate(
                     best_community = best_id
         
         if best_community:
-            # Add as flex card to best community
+            # Check if already a member of target community
             cursor.execute("""
-                INSERT INTO card_community_members 
-                    (community_id, card_blueprint, membership_score, is_core, membership_type)
-                VALUES (%s, %s, %s, FALSE, 'flex')
-            """, (best_community, card_bp, min(best_score / 5.0, 1.0)))
-            reallocated += 1
+                SELECT id FROM card_community_members 
+                WHERE community_id = %s AND card_blueprint = %s
+            """, (best_community, card_bp))
+            if cursor.fetchone():
+                # Already exists, just count as reallocated (will be removed from source)
+                reallocated += 1
+            else:
+                # Add as flex card to best community
+                cursor.execute("""
+                    INSERT INTO card_community_members 
+                        (community_id, card_blueprint, membership_score, is_core, membership_type)
+                    VALUES (%s, %s, %s, FALSE, 'flex')
+                """, (best_community, card_bp, min(best_score / 5.0, 1.0)))
+                reallocated += 1
         else:
-            # Move to orphan pool
+            # Check if already in orphan pool
             cursor.execute("""
-                INSERT INTO card_community_members 
-                    (community_id, card_blueprint, membership_score, is_core, membership_type)
-                VALUES (%s, %s, 0, FALSE, 'core')
+                SELECT id FROM card_community_members 
+                WHERE community_id = %s AND card_blueprint = %s
             """, (orphan_pool_id, card_bp))
+            if not cursor.fetchone():
+                # Move to orphan pool
+                cursor.execute("""
+                    INSERT INTO card_community_members 
+                        (community_id, card_blueprint, membership_score, is_core, membership_type)
+                    VALUES (%s, %s, 0, FALSE, 'core')
+                """, (orphan_pool_id, card_bp))
             orphaned += 1
     
     # Delete the original community and its members
