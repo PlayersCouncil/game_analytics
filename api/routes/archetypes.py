@@ -347,11 +347,18 @@ def delete_and_reallocate(
         if best_community:
             # Check if already a member of target community
             cursor.execute("""
-                SELECT community_id FROM card_community_members 
+                SELECT community_id, membership_type FROM card_community_members 
                 WHERE community_id = %s AND card_blueprint = %s
             """, (best_community, card_bp))
-            if cursor.fetchone():
-                # Already exists, just count as reallocated (will be removed from source)
+            existing = cursor.fetchone()
+            if existing:
+                # Already exists - upgrade to custom if it was flex
+                if existing[1] == 'flex':
+                    cursor.execute("""
+                        UPDATE card_community_members 
+                        SET membership_type = 'custom', membership_score = %s
+                        WHERE community_id = %s AND card_blueprint = %s
+                    """, (min(best_score / 5.0, 1.0), best_community, card_bp))
                 reallocated += 1
             else:
                 # Add as custom card to best community (manually reallocated)
@@ -914,7 +921,7 @@ def search_cards_in_communities(
     """
     search_term = f"%{query.lower()}%"
     
-    # Find cards matching the query that are core members of communities in this format
+    # Find cards matching the query that are core/custom members of communities in this format
     cursor.execute("""
         SELECT DISTINCT
             cat.blueprint,
@@ -928,7 +935,7 @@ def search_cards_in_communities(
         JOIN card_communities cc ON ccm.community_id = cc.id
         WHERE cc.format_name = %s
           AND cc.is_valid = TRUE
-          AND ccm.membership_type = 'core'
+          AND ccm.membership_type IN ('core', 'custom')
           AND LOWER(cat.card_name) LIKE %s
         ORDER BY cat.card_name
         LIMIT 50
@@ -970,7 +977,7 @@ def get_card_index(
         JOIN card_communities cc ON ccm.community_id = cc.id
         WHERE cc.format_name = %s
           AND cc.is_valid = TRUE
-          AND ccm.membership_type = 'core'
+          AND ccm.membership_type IN ('core', 'custom')
         ORDER BY cat.card_name
     """, (format_name,))
     
