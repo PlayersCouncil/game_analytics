@@ -143,6 +143,16 @@
             border-style: dashed;
         }
         
+        .community-item.search-highlight {
+            box-shadow: 0 0 0 2px var(--accent);
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { box-shadow: 0 0 0 2px var(--accent); }
+            50% { box-shadow: 0 0 0 4px var(--accent); }
+        }
+        
         .community-item.free_peoples {
             border-left-color: var(--fp-color);
         }
@@ -250,6 +260,36 @@
         
         .card-item:hover {
             background: var(--bg-primary);
+        }
+        
+        .card-item.filtered-out {
+            opacity: 0.3;
+            background: #2a2a2a !important;
+            border-color: #3a3a3a !important;
+        }
+        
+        .card-item.filtered-out .score-bar {
+            background: #4a4a4a !important;
+        }
+        
+        .cards-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .cards-header h3 {
+            margin: 0;
+        }
+        
+        .cards-header input {
+            padding: 6px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--bg-tertiary);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            width: 200px;
         }
         
         .card-item.core {
@@ -589,6 +629,9 @@
         
         <button onclick="loadCommunities()" class="secondary">Refresh</button>
         
+        <input type="text" id="cardSearch" placeholder="Search card..." 
+               style="margin-left: 20px; padding: 6px 10px; border-radius: 4px; border: 1px solid var(--bg-tertiary); background: var(--bg-secondary); color: var(--text-primary); width: 180px;">
+        
         <nav class="header-links" style="margin-left: auto;">
             <a href="/">Home</a>
             <a href="/query.html">Query Tool</a>
@@ -671,10 +714,11 @@
             const side = document.getElementById('sideFilter').value;
             const showInvalid = document.getElementById('showInvalid').checked;
             
-            // Clear current selection
+            // Clear current selection and search
             currentCommunityId = null;
             document.getElementById('communityDetail').innerHTML = 
-                '<div class="empty-state">Select an archetype to view details</div>';
+                '<div class="empty-state">Select a community to view details</div>';
+            document.getElementById('cardSearch').value = '';
             
             const listEl = document.getElementById('communityList');
             listEl.innerHTML = '<div class="loading">Loading...</div>';
@@ -705,6 +749,7 @@
             
             listEl.innerHTML = communities.map(c => `
                 <div class="community-item ${c.side} ${c.is_valid ? '' : 'invalid'} ${c.is_orphan_pool ? 'orphan-pool' : ''} ${c.id === currentCommunityId ? 'selected' : ''}"
+                     data-community-id="${c.id}"
                      onclick="selectCommunity(${c.id})">
                     <div class="name">
                         ${c.is_orphan_pool ? '📦 ' : ''}${c.archetype_name || `Archetype #${c.community_id}`}
@@ -818,8 +863,12 @@
                     <div class="culture-bar">${cultureBar}</div>
                 </div>
                 
-                <h3>Cards (sorted by centrality)</h3>
-                <div class="cards-grid">
+                <div class="cards-header">
+                    <h3>Cards (sorted by centrality)</h3>
+                    <input type="text" id="cardNameFilter" placeholder="Filter cards..." 
+                           oninput="filterCards()" onkeydown="if(event.key === 'Escape') { this.value=''; filterCards(); }">
+                </div>
+                <div class="cards-grid" id="cardsGrid">
                     ${(() => {
                         // Sort: core first, then custom, then flex - each group by score
                         const coreCards = community.members.filter(c => c.membership_type === 'core' || !c.membership_type);
@@ -836,6 +885,9 @@
                                         card.membership_type === 'custom' ? '📝' :
                                         (card.is_core ? '⭐' : '');
                             
+                            // Normalize name for filtering (remove accents)
+                            const normalizedName = (card.name || card.blueprint).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                            
                             // Escape card data for onclick
                             const cardDataStr = encodeURIComponent(JSON.stringify({
                                 blueprint: card.blueprint,
@@ -849,6 +901,7 @@
                             }));
                             
                             return '<div class="card-item ' + typeClass + '"' +
+                                ' data-name="' + normalizedName + '"' +
                                 ' onclick="openCardPanel(\'' + cardDataStr + '\', ' + community.id + ', ' + (community.is_orphan_pool || false) + ')">' +
                                 '<img src="' + (card.image_url || '/static/images/card-back.png') + '"' +
                                 ' alt="' + (card.name || card.blueprint) + '"' +
@@ -1003,7 +1056,7 @@
             
             // Admin actions
             const actionsEl = document.getElementById('cardPanelActions');
-            if (isAdmin) {
+            if (isAdmin && !isOrphan) {
                 actionsEl.style.display = 'block';
                 actionsEl.innerHTML = `
                     <h4>Admin Actions</h4>
@@ -1030,6 +1083,11 @@
             currentCardCommunityId = null;
         }
         
+        function navigateToArchetype(communityId) {
+            closeCardPanel();
+            selectCommunity(communityId);
+        }
+        
         async function loadOtherCommunities(blueprint, excludeCommunityId) {
             const listEl = document.getElementById('otherCommunitiesList');
             listEl.innerHTML = '<div class="loading">Loading...</div>';
@@ -1043,13 +1101,13 @@
                 
                 if (data.communities && data.communities.length > 0) {
                     listEl.innerHTML = data.communities.map(c => `
-                        <div class="other-community-item" onclick="event.stopPropagation()">
+                        <div class="other-community-item" onclick="navigateToArchetype(${c.id})">
                             <div class="oc-name">${c.archetype_name || `Archetype #${c.community_id}`}</div>
                             <div class="oc-meta">
                                 Avg lift: ${c.avg_lift} · ${c.connected_cards} connected cards
                             </div>
                             ${isAdmin ? `
-                            <div class="oc-actions">
+                            <div class="oc-actions" onclick="event.stopPropagation()">
                                 <button onclick="moveCardToCommunity(${c.id})" class="success">Move Here</button>
                                 <button onclick="addCardToCommunity(${c.id})" class="secondary">Add as Flex</button>
                             </div>
@@ -1148,11 +1206,91 @@
         document.getElementById('formatSelect').addEventListener('change', loadCommunities);
         document.getElementById('sideFilter').addEventListener('change', loadCommunities);
         document.getElementById('showInvalid').addEventListener('change', loadCommunities);
+        document.getElementById('cardSearch').addEventListener('input', handleCardSearch);
         
         // Escape key closes card panel
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeCardPanel();
         });
+        
+        // Card name filter in archetype detail
+        function filterCards() {
+            const filterEl = document.getElementById('cardNameFilter');
+            if (!filterEl) return;
+            
+            const query = filterEl.value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+            const cards = document.querySelectorAll('#cardsGrid .card-item');
+            
+            cards.forEach(card => {
+                const cardName = card.getAttribute('data-name') || '';
+                if (!query || cardName.includes(query)) {
+                    card.classList.remove('filtered-out');
+                } else {
+                    card.classList.add('filtered-out');
+                }
+            });
+        }
+        
+        // Set card name filter programmatically (from global search)
+        function setCardNameFilter(value) {
+            const filterEl = document.getElementById('cardNameFilter');
+            if (filterEl) {
+                filterEl.value = value;
+                filterCards();
+            }
+        }
+        
+        // Card search in header
+        let searchTimeout = null;
+        async function handleCardSearch() {
+            const searchEl = document.getElementById('cardSearch');
+            const query = searchEl.value.trim();
+            
+            // Clear highlights
+            document.querySelectorAll('.community-item.search-highlight').forEach(el => {
+                el.classList.remove('search-highlight');
+            });
+            
+            // Wait for 3+ characters
+            if (query.length < 3) return;
+            
+            // Debounce
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(async () => {
+                const format = document.getElementById('formatSelect').value;
+                if (!format) return;
+                
+                try {
+                    const resp = await fetch(`/api/search-cards?format_name=${encodeURIComponent(format)}&query=${encodeURIComponent(query)}`);
+                    const data = await resp.json();
+                    
+                    if (!data.results || data.results.length === 0) return;
+                    
+                    // Get unique community IDs (excluding orphan pools for auto-navigation)
+                    const nonOrphanResults = data.results.filter(r => !r.is_orphan_pool);
+                    const communityIds = [...new Set(nonOrphanResults.map(r => r.community_id))];
+                    
+                    if (communityIds.length === 1) {
+                        // Exactly one archetype - navigate to it and set filter
+                        selectCommunity(communityIds[0]);
+                        // Set filter after a short delay to allow render
+                        setTimeout(() => setCardNameFilter(query), 100);
+                    } else if (nonOrphanResults.length === 1) {
+                        // Exactly one card - navigate and filter
+                        selectCommunity(nonOrphanResults[0].community_id);
+                        setTimeout(() => setCardNameFilter(query), 100);
+                    } else if (communityIds.length > 1) {
+                        // Multiple archetypes - highlight them all
+                        communityIds.forEach(commId => {
+                            const commEl = document.querySelector(`.community-item[data-community-id="${commId}"]`);
+                            if (commEl) commEl.classList.add('search-highlight');
+                        });
+                    }
+                } catch (err) {
+                    console.error('Card search failed:', err);
+                }
+            }, 300);
+        }
         
         // Init
         loadFormats();

@@ -874,3 +874,51 @@ def move_card_to_community(
     conn.commit()
     
     return {"success": True, "new_membership_score": membership_score}
+
+
+@router.get("/search-cards")
+def search_cards_in_communities(
+    format_name: str = Query(..., description="Format to query"),
+    query: str = Query(..., min_length=3, description="Search query (min 3 chars)"),
+    cursor = Depends(get_db_cursor),
+):
+    """
+    Search for cards by name within a format and return which communities they belong to.
+    
+    Returns cards matching the query and their core community membership.
+    """
+    # Normalize query for accent-agnostic search
+    search_term = f"%{query}%"
+    
+    # Find cards matching the query that are core members of communities in this format
+    cursor.execute("""
+        SELECT DISTINCT
+            cat.blueprint,
+            cat.card_name,
+            cat.side,
+            cc.id as community_id,
+            cc.archetype_name,
+            cc.is_orphan_pool
+        FROM card_catalog cat
+        JOIN card_community_members ccm ON cat.blueprint = ccm.card_blueprint
+        JOIN card_communities cc ON ccm.community_id = cc.id
+        WHERE cc.format_name = %s
+          AND cc.is_valid = TRUE
+          AND ccm.membership_type = 'core'
+          AND cat.card_name LIKE %s
+        ORDER BY cat.card_name
+        LIMIT 50
+    """, (format_name, search_term))
+    
+    results = []
+    for row in cursor.fetchall():
+        results.append({
+            "blueprint": row[0],
+            "name": row[1],
+            "side": row[2],
+            "community_id": row[3],
+            "archetype_name": row[4],
+            "is_orphan_pool": row[5],
+        })
+    
+    return {"query": query, "format_name": format_name, "results": results}
