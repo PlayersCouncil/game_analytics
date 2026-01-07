@@ -276,11 +276,11 @@ def delete_and_reallocate(
         SELECT id FROM card_communities 
         WHERE format_name = %s AND side = %s AND id != %s AND is_orphan_pool = FALSE
     """, (format_name, side, community_id))
-    other_communities = {row[0]: row[1] for row in cursor.fetchall()}
+    other_community_ids = [row[0] for row in cursor.fetchall()]
     
     # Get core cards for each other community
     community_cores = {}
-    for other_id in other_communities:
+    for other_id in other_community_ids:
         cursor.execute("""
             SELECT card_blueprint FROM card_community_members 
             WHERE community_id = %s AND is_core = TRUE
