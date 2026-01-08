@@ -163,8 +163,11 @@ CREATE TABLE stats_computation_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
 
--- Optional: Card catalog for name lookups
--- Populated from HJSON via build_catalog.py
+-- ============================================================================
+-- CARD CATALOG
+-- Card metadata for name lookups. Populated from HJSON via build_catalog.py
+-- ============================================================================
+
 CREATE TABLE card_catalog (
   blueprint VARCHAR(20) PRIMARY KEY,
   card_name VARCHAR(100),
@@ -174,4 +177,105 @@ CREATE TABLE card_catalog (
   set_number SMALLINT,
   image_url VARCHAR(255),
   last_updated DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- ============================================================================
+-- CORRELATION ANALYSIS
+-- Pairwise card correlation data for archetype detection
+-- ============================================================================
+
+CREATE TABLE card_correlations (
+  card_a VARCHAR(20) NOT NULL,
+  card_b VARCHAR(20) NOT NULL,
+  format_name VARCHAR(50) NOT NULL,
+  side ENUM('free_peoples', 'shadow') NOT NULL,
+  
+  -- Raw counts
+  together_count INT NOT NULL,          -- decks containing both
+  card_a_count INT NOT NULL,            -- decks containing A
+  card_b_count INT NOT NULL,            -- decks containing B
+  total_decks INT NOT NULL,             -- total decks in format/side
+  
+  -- Derived metrics
+  jaccard FLOAT NOT NULL,               -- intersection / union
+  lift FLOAT NOT NULL,                  -- P(A∩B) / (P(A) × P(B)) - key metric
+  
+  -- Metadata
+  computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  
+  PRIMARY KEY (card_a, card_b, format_name, side),
+  
+  -- Query pattern: "what correlates with card X?"
+  INDEX idx_card_a_lift (card_a, format_name, side, lift DESC),
+  INDEX idx_card_b_lift (card_b, format_name, side, lift DESC),
+  
+  -- Query pattern: "highest lift pairs in format"
+  INDEX idx_format_lift (format_name, side, lift DESC)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- ============================================================================
+-- ARCHETYPE / COMMUNITY DETECTION
+-- Detected card communities and deck assignments
+-- ============================================================================
+
+-- Detected card communities (archetypes)
+CREATE TABLE card_communities (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  format_name VARCHAR(50) NOT NULL,
+  side ENUM('free_peoples', 'shadow') NOT NULL,
+  
+  -- Stats about this community
+  card_count INT NOT NULL,                -- How many cards in this community
+  deck_count INT NOT NULL DEFAULT 0,      -- How many decks match this community
+  avg_internal_lift FLOAT,                -- Average lift between cards in community
+  
+  -- Human curation
+  archetype_name VARCHAR(100) NOT NULL,   -- Human-assigned name (required)
+  is_valid BOOLEAN DEFAULT TRUE,          -- Human can mark as junk
+  is_orphan_pool BOOLEAN NOT NULL DEFAULT FALSE,  -- Special pool for uncategorized cards
+  notes TEXT,
+  
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  
+  -- Prevent duplicate names within a format/side
+  UNIQUE INDEX idx_format_side_name (format_name, side, archetype_name),
+  INDEX idx_archetype (archetype_name),
+  INDEX idx_cc_orphan_pool (format_name, side, is_orphan_pool)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- Which cards belong to which community
+CREATE TABLE card_community_members (
+  community_id INT NOT NULL,              -- References card_communities.id
+  card_blueprint VARCHAR(20) NOT NULL,
+  
+  -- Card's role in the community
+  membership_score FLOAT NOT NULL,        -- How central is this card (0-1)
+  is_core BOOLEAN DEFAULT FALSE,          -- Appears in >70% of community decks
+  membership_type ENUM('core', 'flex', 'custom') NOT NULL DEFAULT 'core',
+                                          -- core: assigned by detection algorithm
+                                          -- flex: added by post-processing (correlates with multiple core)
+                                          -- custom: manually assigned by user
+  
+  PRIMARY KEY (community_id, card_blueprint),
+  FOREIGN KEY (community_id) REFERENCES card_communities(id) ON DELETE CASCADE,
+  INDEX idx_card (card_blueprint),
+  INDEX idx_ccm_membership_type (membership_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
+
+
+-- Deck archetype assignments (computed after communities exist)
+CREATE TABLE deck_archetypes (
+  game_id INT NOT NULL,
+  player_id INT NOT NULL,
+  community_id INT NOT NULL,              -- Best matching community
+  match_score FLOAT NOT NULL,             -- How well deck matches (0-1)
+  
+  PRIMARY KEY (game_id, player_id),
+  FOREIGN KEY (community_id) REFERENCES card_communities(id) ON DELETE CASCADE,
+  INDEX idx_community (community_id),
+  INDEX idx_score (match_score DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;

@@ -1,2 +1,22 @@
+# Environment
 .env
 !.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Logs
+logs/*.log
+
+# Archive (old migrations, deprecated code)
+archive/
+
+# IDE
+.idea/
+.vscode/
+*.swp

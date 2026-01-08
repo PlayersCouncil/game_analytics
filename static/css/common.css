@@ -1,0 +1,546 @@
+/**
+ * GEMP Card Analytics - Common Styles
+ * Shared variables, resets, and base component styles
+ */
+
+/* ============================================================================
+   CSS VARIABLES
+   ============================================================================ */
+
+:root {
+    /* Background colors */
+    --bg-dark: #1a1a2e;
+    --bg-card: #16213e;
+    --bg-tertiary: #0f3460;
+    
+    /* Accent colors */
+    --accent: #e94560;
+    --accent-dim: #a83249;
+    
+    /* Text colors */
+    --text: #eee;
+    --text-dim: #999;
+    
+    /* Status colors */
+    --positive: #4ade80;
+    --negative: #f87171;
+    --warning: #fbbf24;
+    --neutral: #fbbf24;
+    
+    /* Game-specific colors */
+    --fp-color: #6b9bd1;
+    --shadow-color: #c97878;
+    --played-bar: #d4a574;
+}
+
+
+/* ============================================================================
+   RESET & BASE STYLES
+   ============================================================================ */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+    line-height: 1.6;
+}
+
+
+/* ============================================================================
+   TYPOGRAPHY
+   ============================================================================ */
+
+h1 {
+    color: var(--accent);
+    font-size: 2rem;
+}
+
+h2 {
+    color: var(--text);
+    margin-bottom: 15px;
+    font-size: 1.2em;
+}
+
+h3 {
+    color: var(--text);
+    font-size: 1.1rem;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    opacity: 0.8;
+}
+
+code {
+    background: var(--bg-dark);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 0.9em;
+}
+
+
+/* ============================================================================
+   HEADER & NAVIGATION
+   ============================================================================ */
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.header-links a,
+nav.header-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    margin-left: 20px;
+    font-size: 1rem;
+}
+
+.header-links a:hover,
+nav.header-links a:hover {
+    color: var(--accent);
+}
+
+.nav {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.nav a {
+    color: var(--text-dim);
+    text-decoration: none;
+    margin: 0 10px;
+}
+
+.nav a:hover {
+    color: var(--accent);
+}
+
+
+/* ============================================================================
+   CARDS & PANELS
+   ============================================================================ */
+
+.card {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.card h2 {
+    color: var(--accent);
+    margin-bottom: 15px;
+    font-size: 1.4rem;
+}
+
+.card h3 {
+    margin: 20px 0 10px 0;
+}
+
+.card p {
+    margin-bottom: 15px;
+}
+
+.card ul {
+    margin-left: 25px;
+    margin-bottom: 15px;
+}
+
+.card li {
+    margin-bottom: 8px;
+}
+
+
+/* ============================================================================
+   FORM CONTROLS
+   ============================================================================ */
+
+.controls {
+    background: var(--bg-card);
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    align-items: flex-end;
+}
+
+.control-group,
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.control-group label,
+.form-group label {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+select,
+input[type="text"],
+input[type="date"],
+input[type="number"],
+input[type="password"],
+textarea {
+    background: var(--bg-dark);
+    border: 1px solid #333;
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+}
+
+select:focus,
+input:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+
+/* ============================================================================
+   BUTTONS
+   ============================================================================ */
+
+button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: opacity 0.2s;
+}
+
+button:hover {
+    background: var(--accent-dim);
+}
+
+button:disabled {
+    background: #444;
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+button.secondary {
+    background: var(--bg-tertiary);
+    border: 1px solid #555;
+}
+
+button.secondary:hover {
+    background: #444;
+}
+
+button.secondary.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+button.success {
+    background: var(--positive);
+    border-color: var(--positive);
+}
+
+button.warning {
+    background: var(--warning);
+    border-color: var(--warning);
+    color: #000;
+}
+
+button.danger {
+    background: #dc3545;
+    border-color: #dc3545;
+}
+
+button.danger:hover {
+    background: #c82333;
+}
+
+
+/* ============================================================================
+   CHECKBOX GROUPS
+   ============================================================================ */
+
+.checkbox-group {
+    display: flex;
+    gap: 10px;
+}
+
+.checkbox-group.vertical {
+    flex-direction: column;
+    gap: 4px;
+}
+
+.checkbox-group label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.checkbox-group input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
+
+/* ============================================================================
+   STATUS INDICATORS
+   ============================================================================ */
+
+.wr-positive,
+.status-positive {
+    color: var(--positive);
+}
+
+.wr-negative,
+.status-negative {
+    color: var(--negative);
+}
+
+.wr-neutral,
+.status-neutral {
+    color: var(--neutral);
+}
+
+
+/* ============================================================================
+   GAME-SPECIFIC: SIDE COLORS
+   ============================================================================ */
+
+.side-fp,
+.side-free_peoples {
+    color: var(--fp-color);
+}
+
+.side-shadow {
+    color: var(--shadow-color);
+}
+
+
+/* ============================================================================
+   ALERT BOXES
+   ============================================================================ */
+
+.warning-box {
+    background: rgba(251, 191, 36, 0.1);
+    border-left: 4px solid var(--warning);
+    padding: 15px 20px;
+    margin: 15px 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.warning-box strong {
+    color: var(--warning);
+}
+
+.info-box {
+    background: rgba(74, 222, 128, 0.1);
+    border-left: 4px solid var(--positive);
+    padding: 15px 20px;
+    margin: 15px 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.error-box,
+.error {
+    background: rgba(248, 113, 113, 0.2);
+    border: 1px solid var(--negative);
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+
+/* ============================================================================
+   LOADING & STATUS
+   ============================================================================ */
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text-dim);
+}
+
+.catalog-status {
+    font-size: 0.9rem;
+    margin-left: 10px;
+}
+
+.catalog-status.loading {
+    color: var(--text-dim);
+}
+
+.catalog-status.loaded {
+    color: var(--positive);
+}
+
+.catalog-status.error {
+    color: var(--negative);
+}
+
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+
+.table-container {
+    background: var(--bg-card);
+    border-radius: 8px;
+    overflow-x: auto;
+    overflow-y: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    padding: 8px 10px;
+    text-align: left;
+}
+
+th {
+    background: var(--bg-dark);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    position: relative;
+}
+
+th:hover {
+    color: var(--accent);
+}
+
+th.sorted {
+    color: var(--accent);
+}
+
+th.sorted::after {
+    content: ' ▼';
+}
+
+th.sorted.asc::after {
+    content: ' ▲';
+}
+
+tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+tr:hover {
+    background: rgba(233, 69, 96, 0.1);
+}
+
+.blueprint {
+    font-family: monospace;
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+
+/* ============================================================================
+   BAR CHARTS (inline)
+   ============================================================================ */
+
+.bar-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bar-cell .bar {
+    width: 50px;
+    height: 8px;
+    background: #333;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bar-cell .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+}
+
+.bar-cell .bar-fill.positive {
+    background: var(--positive);
+}
+
+.bar-cell .bar-fill.negative {
+    background: var(--negative);
+}
+
+.bar-cell .bar-fill.played {
+    background: var(--played-bar);
+}
+
+.bar-cell .bar-fill.players {
+    background: var(--fp-color);
+}
+
+
+/* ============================================================================
+   FOOTER
+   ============================================================================ */
+
+footer {
+    text-align: center;
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--bg-card);
+    color: var(--text-dim);
+    font-size: 0.9rem;
+}
+
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    header {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .controls {
+        flex-direction: column;
+    }
+    
+    .control-group {
+        width: 100%;
+    }
+    
+    select, input {
+        width: 100%;
+    }
+}

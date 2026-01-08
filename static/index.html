@@ -4,59 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GEMP Card Analytics</title>
+    <link rel="stylesheet" href="/static/css/common.css">
     <style>
-        :root {
-            --bg-dark: #1a1a2e;
-            --bg-card: #16213e;
-            --accent: #e94560;
-            --accent-dim: #a83249;
-            --text: #eee;
-            --text-dim: #999;
-            --positive: #4ade80;
-            --negative: #f87171;
-            --warning: #fbbf24;
-        }
-        
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text);
-            min-height: 100vh;
-            padding: 20px;
-            font-size: 16px;
-            line-height: 1.6;
-        }
-        
+        /* Page-specific styles */
         header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
             max-width: 1200px;
             margin-left: auto;
             margin-right: auto;
-        }
-        
-        h1 {
-            color: var(--accent);
-            font-size: 2rem;
-        }
-        
-        nav.header-links a {
-            color: var(--text-dim);
-            text-decoration: none;
-            margin-left: 20px;
-            font-size: 1rem;
-        }
-        
-        nav.header-links a:hover {
-            color: var(--accent);
+            margin-bottom: 30px;
         }
         
         .content {
@@ -65,36 +20,8 @@
         }
         
         .card {
-            background: var(--bg-card);
             padding: 25px 30px;
-            border-radius: 8px;
             margin-bottom: 25px;
-        }
-        
-        .card h2 {
-            color: var(--accent);
-            margin-bottom: 15px;
-            font-size: 1.4rem;
-        }
-        
-        .card h3 {
-            color: var(--text);
-            margin: 20px 0 10px 0;
-            font-size: 1.1rem;
-        }
-        
-        .card p {
-            margin-bottom: 15px;
-            color: var(--text);
-        }
-        
-        .card ul {
-            margin-left: 25px;
-            margin-bottom: 15px;
-        }
-        
-        .card li {
-            margin-bottom: 8px;
         }
         
         .quick-links {
@@ -117,6 +44,7 @@
         .quick-link:hover {
             transform: translateY(-2px);
             border-color: var(--accent);
+            opacity: 1;
         }
         
         .quick-link h3 {
@@ -128,34 +56,7 @@
         .quick-link p {
             color: var(--text-dim);
             font-size: 0.95rem;
-        }
-        
-        .warning-box {
-            background: rgba(251, 191, 36, 0.1);
-            border-left: 4px solid var(--warning);
-            padding: 15px 20px;
-            margin: 15px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        
-        .warning-box strong {
-            color: var(--warning);
-        }
-        
-        .info-box {
-            background: rgba(74, 222, 128, 0.1);
-            border-left: 4px solid var(--positive);
-            padding: 15px 20px;
-            margin: 15px 0;
-            border-radius: 0 8px 8px 0;
-        }
-        
-        code {
-            background: var(--bg-dark);
-            padding: 2px 6px;
-            border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', monospace;
-            font-size: 0.9em;
+            margin-bottom: 0;
         }
         
         .stat-explanation {
@@ -186,20 +87,6 @@
         .color-green { background: var(--positive); }
         .color-yellow { background: var(--warning); }
         .color-red { background: var(--negative); }
-        
-        footer {
-            text-align: center;
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid var(--bg-card);
-            color: var(--text-dim);
-            font-size: 0.9rem;
-        }
-        
-        footer a {
-            color: var(--accent);
-            text-decoration: none;
-        }
     </style>
 </head>
 <body>
@@ -236,7 +123,7 @@
                 <dd>Number of games where this card appeared in at least one player's deck.</dd>
                 
                 <dt>Inclusion WR</dt>
-                <dd>Win rate when the card is in your deck, whether played or not.  This is often a statement about that deck rather than that card.</dd>
+                <dd>Win rate when the card is in your deck, whether played or not. This is often a statement about that deck rather than that card.</dd>
                 
                 <dt>Players</dt>
                 <dd>Unique players who included this card (helps identify "pet decks" vs meta trends).</dd>
@@ -258,7 +145,7 @@
             <div class="warning-box">
                 <strong>⚠️ Attached Zone Bug</strong>
                 <p style="margin-top: 8px; margin-bottom: 0;">
-                    Before January 2026, cards which played into the ATTACHED zone (such as weapons or conditions like Last Alliance) were incorrectly tracked and so never registered as "played".  These cards will thus show as 0 played across the board.  If you see a very low play stat and it is an attachment, disregard the <strong>Play WR</strong> for that card.
+                    Before January 2026, cards which played into the ATTACHED zone (such as weapons or conditions like Last Alliance) were incorrectly tracked and so never registered as "played". These cards will thus show as 0 played across the board. If you see a very low play stat and it is an attachment, disregard the <strong>Play WR</strong> for that card.
                     Events are still affected by this bug and never show as played; this will be fixed in the future.
                 </p>
             </div>
