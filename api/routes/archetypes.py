@@ -23,16 +23,59 @@ def verify_admin(x_admin_key: Optional[str] = Header(None)):
     return True
 
 
+def get_patch_id(cursor, patch_id: Optional[int] = None, patch_name: Optional[str] = None) -> int:
+    """
+    Resolve patch_id from either direct ID or patch name.
+    If neither specified, returns the most recent patch.
+    Raises HTTPException if patch not found.
+    """
+    if patch_id:
+        # Verify it exists
+        cursor.execute("SELECT id FROM balance_patches WHERE id = %s", (patch_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Patch ID {patch_id} not found")
+        return patch_id
+    
+    if patch_name:
+        cursor.execute("SELECT id FROM balance_patches WHERE patch_name = %s", (patch_name,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Patch '{patch_name}' not found")
+        return row[0]
+    
+    # Default to most recent patch
+    cursor.execute("SELECT id FROM balance_patches ORDER BY patch_date DESC LIMIT 1")
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="No patches defined. Create a patch first.")
+    return row[0]
+
+
+def get_patch_info(cursor, patch_id: int) -> dict:
+    """Get patch name and date for response enrichment."""
+    cursor.execute("SELECT patch_name, patch_date FROM balance_patches WHERE id = %s", (patch_id,))
+    row = cursor.fetchone()
+    if row:
+        return {"patch_id": patch_id, "patch_name": row[0], "patch_date": row[1].isoformat() if row[1] else None}
+    return {"patch_id": patch_id, "patch_name": None, "patch_date": None}
+
+
 @router.get("/communities")
 def list_communities(
     format_name: str = Query(..., description="Format to query"),
     side: Optional[str] = Query(None, description="Filter by side (free_peoples/shadow)"),
+    patch_id: Optional[int] = Query(None, description="Patch ID (default: most recent)"),
+    patch_name: Optional[str] = Query(None, description="Patch name (alternative to patch_id)"),
     include_invalid: bool = Query(False, description="Include communities marked as invalid"),
     cursor = Depends(get_db_cursor),
 ):
     """
-    List all detected communities for a format.
+    List all detected communities for a format and patch.
+    Defaults to most recent patch if not specified.
     """
+    resolved_patch_id = get_patch_id(cursor, patch_id, patch_name)
+    patch_info = get_patch_info(cursor, resolved_patch_id)
+    
     query = """
         SELECT 
             cc.id,
@@ -47,9 +90,9 @@ def list_communities(
             cc.notes,
             cc.created_at
         FROM card_communities cc
-        WHERE cc.format_name = %s
+        WHERE cc.format_name = %s AND cc.patch_id = %s
     """
-    params = [format_name]
+    params = [format_name, resolved_patch_id]
     
     if side:
         query += " AND cc.side = %s"
@@ -80,7 +123,11 @@ def list_communities(
             "created_at": row[10].isoformat() if row[10] else None,
         })
     
-    return {"format_name": format_name, "communities": communities}
+    return {
+        "format_name": format_name, 
+        "communities": communities,
+        **patch_info
+    }
 
 
 @router.get("/communities/{community_id}")
@@ -498,6 +545,8 @@ def list_formats_with_communities(
 def get_card_community_associations(
     blueprint: str,
     format_name: str = Query(..., description="Format to query"),
+    patch_id: Optional[int] = Query(None, description="Patch ID (default: most recent)"),
+    patch_name: Optional[str] = Query(None, description="Patch name (alternative to patch_id)"),
     exclude_community_id: Optional[int] = Query(None, description="Exclude this community (the one we're viewing)"),
     limit: int = Query(5, description="Max communities to return"),
     cursor = Depends(get_db_cursor),
@@ -508,6 +557,8 @@ def get_card_community_associations(
     Returns top N communities where this card correlates strongly with community members,
     even if the card isn't officially in that community.
     """
+    resolved_patch_id = get_patch_id(cursor, patch_id, patch_name)
+    
     # Get the card's side first
     cursor.execute("""
         SELECT side FROM card_catalog WHERE blueprint = %s
@@ -533,6 +584,7 @@ def get_card_community_associations(
         LEFT JOIN card_correlations corr ON (
             corr.format_name = cc.format_name
             AND corr.side = cc.side
+            AND corr.patch_id = cc.patch_id
             AND (
                 (corr.card_a = %s AND corr.card_b = ccm.card_blueprint)
                 OR (corr.card_b = %s AND corr.card_a = ccm.card_blueprint)
@@ -540,10 +592,11 @@ def get_card_community_associations(
         )
         WHERE cc.format_name = %s
           AND cc.side = %s
+          AND cc.patch_id = %s
           AND cc.is_valid = TRUE
           AND corr.lift IS NOT NULL
     """
-    params = [blueprint, blueprint, format_name, card_side]
+    params = [blueprint, blueprint, format_name, card_side, resolved_patch_id]
     
     if exclude_community_id:
         query += " AND cc.id != %s"
@@ -961,12 +1014,17 @@ def search_cards_in_communities(
 @router.get("/card-index")
 def get_card_index(
     format_name: str = Query(..., description="Format to query"),
+    patch_id: Optional[int] = Query(None, description="Patch ID (default: most recent)"),
+    patch_name: Optional[str] = Query(None, description="Patch name (alternative to patch_id)"),
     cursor = Depends(get_db_cursor),
 ):
     """
     Get a searchable index of all cards with their community memberships for a format.
     Used for client-side searching with accent normalization.
     """
+    resolved_patch_id = get_patch_id(cursor, patch_id, patch_name)
+    patch_info = get_patch_info(cursor, resolved_patch_id)
+    
     cursor.execute("""
         SELECT 
             cat.blueprint,
@@ -979,10 +1037,11 @@ def get_card_index(
         JOIN card_community_members ccm ON cat.blueprint = ccm.card_blueprint
         JOIN card_communities cc ON ccm.community_id = cc.id
         WHERE cc.format_name = %s
+          AND cc.patch_id = %s
           AND cc.is_valid = TRUE
           AND ccm.membership_type IN ('core', 'custom')
         ORDER BY cat.card_name
-    """, (format_name,))
+    """, (format_name, resolved_patch_id))
     
     cards = []
     for row in cursor.fetchall():
@@ -995,4 +1054,4 @@ def get_card_index(
             "is_orphan_pool": row[5],
         })
     
-    return {"format_name": format_name, "cards": cards}
+    return {"format_name": format_name, "cards": cards, **patch_info}

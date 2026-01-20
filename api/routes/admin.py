@@ -43,11 +43,17 @@ def run_catalog_rebuild():
     subprocess.run(cmd, check=True)
 
 
-def run_detect_archetypes(format_name: Optional[str] = None, resolution: float = 7.5):
+def run_detect_archetypes(
+    format_name: Optional[str] = None, 
+    patch_name: Optional[str] = None,
+    resolution: float = 7.5
+):
     """Run detect_archetypes.py in subprocess."""
     cmd = [sys.executable, 'detect_archetypes.py', '--resolution', str(resolution)]
     if format_name:
         cmd.extend(['--format', format_name])
+    if patch_name:
+        cmd.extend(['--patch', patch_name])
     subprocess.run(cmd, check=True)
 
 
@@ -166,20 +172,28 @@ def get_status(cursor = Depends(get_db_cursor)):
 def trigger_detect_archetypes(
     background_tasks: BackgroundTasks,
     format_name: Optional[str] = None,
+    patch_name: Optional[str] = None,
     resolution: float = 7.5,
 ):
     """
     Trigger archetype detection using Louvain community detection.
     
     - **format_name**: Optional format to process (default: all formats)
+    - **patch_name**: Optional patch to process (default: all patches)
     - **resolution**: Louvain resolution parameter (default: 7.5, higher = more granular)
     
-    WARNING: This will delete all existing archetypes and rebuild from scratch.
+    WARNING: This will delete existing archetypes for the specified scope and rebuild from scratch.
     """
-    background_tasks.add_task(run_detect_archetypes, format_name, resolution)
+    background_tasks.add_task(run_detect_archetypes, format_name, patch_name, resolution)
+    
+    scope_parts = []
+    if format_name:
+        scope_parts.append(f"format: {format_name}")
+    if patch_name:
+        scope_parts.append(f"patch: {patch_name}")
+    scope = ", ".join(scope_parts) if scope_parts else "all formats and patches"
     
     return {
         "status": "started",
-        "message": f"Archetype detection started (resolution: {resolution})" + 
-                   (f" for format: {format_name}" if format_name else " for all formats")
+        "message": f"Archetype detection started (resolution: {resolution}) for {scope}"
     }

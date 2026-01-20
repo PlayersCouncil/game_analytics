@@ -190,6 +190,7 @@ CREATE TABLE card_correlations (
   card_b VARCHAR(20) NOT NULL,
   format_name VARCHAR(50) NOT NULL,
   side ENUM('free_peoples', 'shadow') NOT NULL,
+  patch_id INT NOT NULL,                -- Which era/patch this correlation belongs to
   
   -- Raw counts
   together_count INT NOT NULL,          -- decks containing both
@@ -204,14 +205,15 @@ CREATE TABLE card_correlations (
   -- Metadata
   computed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   
-  PRIMARY KEY (card_a, card_b, format_name, side),
+  PRIMARY KEY (card_a, card_b, format_name, side, patch_id),
+  CONSTRAINT fk_cc_patch FOREIGN KEY (patch_id) REFERENCES balance_patches(id) ON DELETE CASCADE,
   
-  -- Query pattern: "what correlates with card X?"
-  INDEX idx_card_a_lift (card_a, format_name, side, lift DESC),
-  INDEX idx_card_b_lift (card_b, format_name, side, lift DESC),
+  -- Query pattern: "what correlates with card X in patch Y?"
+  INDEX idx_card_a_patch_lift (card_a, format_name, side, patch_id, lift DESC),
+  INDEX idx_card_b_patch_lift (card_b, format_name, side, patch_id, lift DESC),
   
-  -- Query pattern: "highest lift pairs in format"
-  INDEX idx_format_lift (format_name, side, lift DESC)
+  -- Query pattern: "highest lift pairs in format for patch"
+  INDEX idx_format_patch_lift (format_name, side, patch_id, lift DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
 
@@ -225,6 +227,7 @@ CREATE TABLE card_communities (
   id INT AUTO_INCREMENT PRIMARY KEY,
   format_name VARCHAR(50) NOT NULL,
   side ENUM('free_peoples', 'shadow') NOT NULL,
+  patch_id INT NOT NULL,                  -- Which era/patch this community belongs to
   
   -- Stats about this community
   card_count INT NOT NULL,                -- How many cards in this community
@@ -240,10 +243,13 @@ CREATE TABLE card_communities (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   
-  -- Prevent duplicate names within a format/side
-  UNIQUE INDEX idx_format_side_name (format_name, side, archetype_name),
+  CONSTRAINT fk_cc_patch FOREIGN KEY (patch_id) REFERENCES balance_patches(id) ON DELETE CASCADE,
+  
+  -- Prevent duplicate names within a format/side/patch
+  UNIQUE INDEX idx_format_side_patch_name (format_name, side, patch_id, archetype_name),
   INDEX idx_archetype (archetype_name),
-  INDEX idx_cc_orphan_pool (format_name, side, is_orphan_pool)
+  INDEX idx_cc_orphan_pool (format_name, side, patch_id, is_orphan_pool),
+  INDEX idx_cc_patch (patch_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_bin;
 
 

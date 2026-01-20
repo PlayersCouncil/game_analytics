@@ -5,6 +5,8 @@ GEMP Archetype Detection
 Uses graph community detection on card correlations to find natural card clusters.
 These clusters are candidate archetypes that humans can then name and validate.
 
+Archetypes are computed per-patch (era), using only correlations from that patch.
+
 Algorithm:
 1. Build graph: cards = nodes, correlations = edges (weighted by lift)
 2. Run Louvain community detection to find natural clusters
@@ -19,7 +21,8 @@ Card membership types:
 - 'custom': Cards manually assigned/reallocated by users
 
 Usage:
-    python detect_archetypes.py                           # All formats
+    python detect_archetypes.py                           # All patches and formats
+    python detect_archetypes.py --patch "V3 Release"      # Specific patch only
     python detect_archetypes.py --format "Fellowship Block"
     python detect_archetypes.py --min-lift 1.5            # Stricter edge threshold
     python detect_archetypes.py --resolution 7.5          # More granular communities
@@ -33,6 +36,7 @@ import gc
 import logging
 import sys
 from collections import defaultdict
+from datetime import date
 from typing import Optional
 
 import mysql.connector
@@ -59,9 +63,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float, min_together: int) -> nx.Graph:
+def build_correlation_graph(
+    cursor, 
+    format_name: str, 
+    side: str, 
+    patch_id: int,
+    min_lift: float, 
+    min_together: int
+) -> nx.Graph:
     """
-    Build a weighted graph from card correlations.
+    Build a weighted graph from card correlations for a specific patch.
     
     Nodes = cards
     Edges = correlations with lift >= min_lift
@@ -72,9 +83,10 @@ def build_correlation_graph(cursor, format_name: str, side: str, min_lift: float
         FROM card_correlations
         WHERE format_name = %s 
           AND side = %s
+          AND patch_id = %s
           AND lift >= %s
           AND together_count >= %s
-    """, (format_name, side, min_lift, min_together))
+    """, (format_name, side, patch_id, min_lift, min_together))
     
     G = nx.Graph()
     
@@ -177,16 +189,16 @@ def compute_community_stats(
     return results, orphaned_cards
 
 
-def get_or_create_orphan_pool(cursor, conn, format_name: str, side: str) -> int:
+def get_or_create_orphan_pool(cursor, conn, format_name: str, side: str, patch_id: int) -> int:
     """
-    Get or create the orphan pool community for a format/side.
+    Get or create the orphan pool community for a format/side/patch.
     Returns the database ID of the orphan pool.
     """
     # Check if orphan pool exists
     cursor.execute("""
         SELECT id FROM card_communities
-        WHERE format_name = %s AND side = %s AND is_orphan_pool = TRUE
-    """, (format_name, side))
+        WHERE format_name = %s AND side = %s AND patch_id = %s AND is_orphan_pool = TRUE
+    """, (format_name, side, patch_id))
     
     row = cursor.fetchone()
     if row:
@@ -195,10 +207,10 @@ def get_or_create_orphan_pool(cursor, conn, format_name: str, side: str) -> int:
     # Create orphan pool
     cursor.execute("""
         INSERT INTO card_communities 
-            (format_name, side, card_count, avg_internal_lift, 
+            (format_name, side, patch_id, card_count, avg_internal_lift, 
              archetype_name, is_valid, is_orphan_pool)
-        VALUES (%s, %s, 0, 0, 'Orphaned Cards', TRUE, TRUE)
-    """, (format_name, side))
+        VALUES (%s, %s, %s, 0, 0, 'Orphaned Cards', TRUE, TRUE)
+    """, (format_name, side, patch_id))
     conn.commit()
     
     return cursor.lastrowid
@@ -208,7 +220,8 @@ def update_orphan_pool(
     cursor, 
     conn, 
     format_name: str, 
-    side: str, 
+    side: str,
+    patch_id: int,
     orphaned_cards: list[str],
     dry_run: bool = False
 ):
@@ -230,7 +243,7 @@ def update_orphan_pool(
             logger.info(f"    ... and {len(orphaned_cards) - 10} more")
         return
     
-    orphan_pool_id = get_or_create_orphan_pool(cursor, conn, format_name, side)
+    orphan_pool_id = get_or_create_orphan_pool(cursor, conn, format_name, side, patch_id)
     
     # Clear existing orphan pool members (they'll be re-evaluated)
     cursor.execute("""
@@ -286,6 +299,7 @@ def insert_communities(
     conn,
     format_name: str,
     side: str,
+    patch_id: int,
     community_stats: list[dict],
     dry_run: bool = False,
 ) -> list[int]:
@@ -310,17 +324,17 @@ def insert_communities(
                 logger.info(f"    {card} ({name}): score={score:.2f}")
         return []
     
-    # Clear existing communities for this format/side (all members including custom)
+    # Clear existing communities for this format/side/patch (all members including custom)
     cursor.execute("""
         DELETE ccm FROM card_community_members ccm
         JOIN card_communities cc ON ccm.community_id = cc.id
-        WHERE cc.format_name = %s AND cc.side = %s AND cc.is_orphan_pool = FALSE
-    """, (format_name, side))
+        WHERE cc.format_name = %s AND cc.side = %s AND cc.patch_id = %s AND cc.is_orphan_pool = FALSE
+    """, (format_name, side, patch_id))
     
     cursor.execute("""
         DELETE FROM card_communities 
-        WHERE format_name = %s AND side = %s AND is_orphan_pool = FALSE
-    """, (format_name, side))
+        WHERE format_name = %s AND side = %s AND patch_id = %s AND is_orphan_pool = FALSE
+    """, (format_name, side, patch_id))
     conn.commit()
     
     db_community_ids = []
@@ -331,9 +345,9 @@ def insert_communities(
         archetype_name = f"Archetype #{comm['community_id']}"
         cursor.execute("""
             INSERT INTO card_communities 
-                (format_name, side, card_count, avg_internal_lift, archetype_name)
-            VALUES (%s, %s, %s, %s, %s)
-        """, (format_name, side, comm['card_count'], comm['avg_internal_lift'], archetype_name))
+                (format_name, side, patch_id, card_count, avg_internal_lift, archetype_name)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (format_name, side, patch_id, comm['card_count'], comm['avg_internal_lift'], archetype_name))
         
         db_community_id = cursor.lastrowid
         db_community_ids.append(db_community_id)
@@ -476,19 +490,49 @@ def insert_flex_cards(
     logger.info(f"  Added {len(flex_data)} flex cards")
 
 
-def get_available_formats(cursor) -> list[str]:
-    """Get list of formats with correlation data."""
+def get_patches(cursor) -> list[dict]:
+    """
+    Load all patches ordered by date.
+    Returns list of {id, patch_name, patch_date}
+    """
+    cursor.execute("""
+        SELECT id, patch_name, patch_date
+        FROM balance_patches
+        ORDER BY patch_date ASC
+    """)
+    
+    return [{'id': row[0], 'patch_name': row[1], 'patch_date': row[2]} for row in cursor.fetchall()]
+
+
+def get_patch_by_name(cursor, patch_name: str) -> Optional[dict]:
+    """Get a specific patch by name."""
+    cursor.execute("""
+        SELECT id, patch_name, patch_date
+        FROM balance_patches
+        WHERE patch_name = %s
+    """, (patch_name,))
+    
+    row = cursor.fetchone()
+    if row:
+        return {'id': row[0], 'patch_name': row[1], 'patch_date': row[2]}
+    return None
+
+
+def get_available_formats(cursor, patch_id: int) -> list[str]:
+    """Get list of formats with correlation data for a specific patch."""
     cursor.execute("""
         SELECT DISTINCT format_name 
-        FROM card_correlations 
+        FROM card_correlations
+        WHERE patch_id = %s
         ORDER BY format_name
-    """)
+    """, (patch_id,))
     return [row[0] for row in cursor.fetchall()]
 
 
 def main():
     parser = argparse.ArgumentParser(description='GEMP Archetype Detection')
     parser.add_argument('--format', type=str, help='Specific format to analyze')
+    parser.add_argument('--patch', type=str, help='Specific patch/era to detect (default: all patches)')
     parser.add_argument('--min-lift', type=float, default=1.5,
                         help='Minimum lift for correlation edges (default: 1.5)')
     parser.add_argument('--min-together', type=int, default=50,
@@ -525,66 +569,96 @@ def main():
         sys.exit(1)
     
     try:
-        # Determine formats to process
-        if args.format:
-            formats = [args.format]
+        # Load patches
+        if args.patch:
+            patch = get_patch_by_name(cursor, args.patch)
+            if not patch:
+                logger.error(f"Patch '{args.patch}' not found in balance_patches")
+                sys.exit(1)
+            patches_to_process = [patch]
         else:
-            formats = get_available_formats(cursor)
+            patches_to_process = get_patches(cursor)
         
-        logger.info(f"Processing {len(formats)} formats")
+        if not patches_to_process:
+            logger.error("No patches found in balance_patches table. "
+                        "Please create at least one patch before detecting archetypes.")
+            sys.exit(1)
         
-        for format_name in formats:
-            logger.info(f"\n=== Processing {format_name} ===")
+        logger.info(f"Processing {len(patches_to_process)} patch(es)")
+        
+        for patch in patches_to_process:
+            patch_id = patch['id']
+            patch_name = patch['patch_name']
             
-            for side in ['free_peoples', 'shadow']:
-                logger.info(f"\n--- {side.replace('_', ' ').title()} ---")
+            logger.info(f"\n{'='*60}")
+            logger.info(f"PATCH: {patch_name}")
+            logger.info(f"{'='*60}")
+            
+            # Determine formats to process (must have correlations for this patch)
+            if args.format:
+                formats = [args.format]
+            else:
+                formats = get_available_formats(cursor, patch_id)
+            
+            if not formats:
+                logger.warning(f"  No correlation data found for patch {patch_name}. "
+                              "Run compute_correlations.py first.")
+                continue
+            
+            logger.info(f"Processing {len(formats)} formats")
+            
+            for format_name in formats:
+                logger.info(f"\n=== Processing {format_name} ===")
                 
-                try:
-                    # Build graph from correlations
-                    G = build_correlation_graph(
-                        cursor, format_name, side,
-                        args.min_lift, args.min_together
-                    )
+                for side in ['free_peoples', 'shadow']:
+                    logger.info(f"\n--- {side.replace('_', ' ').title()} ---")
                     
-                    if G.number_of_nodes() < 10:
-                        logger.info("  Too few cards for meaningful communities, skipping")
-                        continue
-                    
-                    # Detect communities
-                    communities = detect_communities(G, resolution=args.resolution)
-                    
-                    if not communities:
-                        logger.info("  No communities detected")
-                        continue
-                    
-                    # Compute stats (returns tuple: stats list, orphaned cards)
-                    stats, orphaned_cards = compute_community_stats(G, communities, cursor, format_name, side)
-                    
-                    # Store core communities
-                    db_ids = insert_communities(cursor, conn, format_name, side, stats, args.dry_run)
-                    
-                    # Find and insert flex cards
-                    if not args.no_flex:
-                        flex_cards = find_flex_cards(
-                            G, stats, communities,
-                            min_core_connections_pct=args.flex_min_connections,
-                            min_avg_lift=args.flex_min_lift
+                    try:
+                        # Build graph from correlations for this patch
+                        G = build_correlation_graph(
+                            cursor, format_name, side, patch_id,
+                            args.min_lift, args.min_together
                         )
-                        if flex_cards:
-                            insert_flex_cards(cursor, conn, db_ids, stats, flex_cards, args.dry_run)
-                    
-                    # Handle orphaned cards
-                    update_orphan_pool(cursor, conn, format_name, side, orphaned_cards, args.dry_run)
-                    
-                    # Cleanup
-                    del G, communities, stats
-                    gc.collect()
-                    
-                except Exception as e:
-                    logger.error(f"Error processing {format_name} {side}: {e}")
-                    import traceback
-                    logger.error(traceback.format_exc())
-                    continue
+                        
+                        if G.number_of_nodes() < 10:
+                            logger.info("  Too few cards for meaningful communities, skipping")
+                            continue
+                        
+                        # Detect communities
+                        communities = detect_communities(G, resolution=args.resolution)
+                        
+                        if not communities:
+                            logger.info("  No communities detected")
+                            continue
+                        
+                        # Compute stats (returns tuple: stats list, orphaned cards)
+                        stats, orphaned_cards = compute_community_stats(G, communities, cursor, format_name, side)
+                        
+                        # Store core communities
+                        db_ids = insert_communities(cursor, conn, format_name, side, patch_id, stats, args.dry_run)
+                        
+                        # Find and insert flex cards
+                        if not args.no_flex:
+                            flex_cards = find_flex_cards(
+                                G, stats, communities,
+                                min_core_connections_pct=args.flex_min_connections,
+                                min_avg_lift=args.flex_min_lift
+                            )
+                            if flex_cards:
+                                insert_flex_cards(cursor, conn, db_ids, stats, flex_cards, args.dry_run)
+                        
+                        # Handle orphaned cards
+                        update_orphan_pool(cursor, conn, format_name, side, patch_id, orphaned_cards, args.dry_run)
+                        
+                        # Cleanup
+                        del G, communities, stats
+                        gc.collect()
+                        
+                    except Exception as e:
+                        logger.error(f"Error processing {format_name} {side}: {e}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                        continue
         
         logger.info("\nArchetype detection complete!")
     

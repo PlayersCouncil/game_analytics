@@ -3,7 +3,7 @@ Card correlation API endpoints.
 """
 
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 
 from ..main import get_db_cursor
 from ..models import CorrelationResponse, CardCorrelation
@@ -11,11 +11,38 @@ from ..models import CorrelationResponse, CardCorrelation
 router = APIRouter(tags=["correlations"])
 
 
+def get_patch_id(cursor, patch_id: Optional[int] = None, patch_name: Optional[str] = None) -> int:
+    """
+    Resolve patch_id from either direct ID or patch name.
+    If neither specified, returns the most recent patch.
+    """
+    if patch_id:
+        cursor.execute("SELECT id FROM balance_patches WHERE id = %s", (patch_id,))
+        if not cursor.fetchone():
+            raise HTTPException(status_code=404, detail=f"Patch ID {patch_id} not found")
+        return patch_id
+    
+    if patch_name:
+        cursor.execute("SELECT id FROM balance_patches WHERE patch_name = %s", (patch_name,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Patch '{patch_name}' not found")
+        return row[0]
+    
+    cursor.execute("SELECT id FROM balance_patches ORDER BY patch_date DESC LIMIT 1")
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="No patches defined. Create a patch first.")
+    return row[0]
+
+
 @router.get("/correlations/{blueprint}", response_model=CorrelationResponse)
 def get_card_correlations(
     blueprint: str,
     format_name: str = Query(..., description="Format to query"),
     side: Optional[str] = Query(None, description="Filter by side (free_peoples/shadow)"),
+    patch_id: Optional[int] = Query(None, description="Patch ID (default: most recent)"),
+    patch_name: Optional[str] = Query(None, description="Patch name (alternative to patch_id)"),
     min_lift: float = Query(1.5, description="Minimum lift threshold"),
     limit: int = Query(50, description="Maximum results"),
     cursor = Depends(get_db_cursor),
@@ -28,6 +55,8 @@ def get_card_correlations(
     - lift = 1.0 means independent (no correlation)
     - lift < 1.0 means they appear together less than expected
     """
+    resolved_patch_id = get_patch_id(cursor, patch_id, patch_name)
+    
     # Query correlations where this card is either card_a or card_b
     query = """
         SELECT 
@@ -41,10 +70,11 @@ def get_card_correlations(
             side
         FROM card_correlations
         WHERE format_name = %s
+          AND patch_id = %s
           AND (card_a = %s OR card_b = %s)
           AND lift >= %s
     """
-    params = [blueprint, blueprint, blueprint, format_name, blueprint, blueprint, min_lift]
+    params = [blueprint, blueprint, blueprint, format_name, resolved_patch_id, blueprint, blueprint, min_lift]
     
     if side:
         query += " AND side = %s"
@@ -81,6 +111,8 @@ def get_card_correlations(
 def get_top_correlations(
     format_name: str = Query(..., description="Format to query"),
     side: str = Query(..., description="Side (free_peoples/shadow)"),
+    patch_id: Optional[int] = Query(None, description="Patch ID (default: most recent)"),
+    patch_name: Optional[str] = Query(None, description="Patch name (alternative to patch_id)"),
     min_lift: float = Query(2.0, description="Minimum lift threshold"),
     min_together: int = Query(20, description="Minimum times appearing together"),
     limit: int = Query(100, description="Maximum results"),
@@ -91,6 +123,8 @@ def get_top_correlations(
     
     Useful for discovering potential archetypes.
     """
+    resolved_patch_id = get_patch_id(cursor, patch_id, patch_name)
+    
     cursor.execute("""
         SELECT 
             card_a,
@@ -104,11 +138,12 @@ def get_top_correlations(
         FROM card_correlations
         WHERE format_name = %s
           AND side = %s
+          AND patch_id = %s
           AND lift >= %s
           AND together_count >= %s
         ORDER BY lift DESC
         LIMIT %s
-    """, (format_name, side, min_lift, min_together, limit))
+    """, (format_name, side, resolved_patch_id, min_lift, min_together, limit))
     
     rows = cursor.fetchall()
     

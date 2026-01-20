@@ -667,6 +667,10 @@
             <option value="">Loading formats...</option>
         </select>
         
+        <select id="eraSelect">
+            <option value="">Loading eras...</option>
+        </select>
+        
         <select id="sideFilter">
             <option value="">All Sides</option>
             <option value="free_peoples">Free Peoples</option>
@@ -775,6 +779,40 @@
             }
         }
         
+        // Load available eras/patches on page load
+        let patches = [];
+        async function loadPatches() {
+            try {
+                const resp = await fetch('/api/patches');
+                const data = await resp.json();
+                // Sort by date descending (newest first)
+                patches = data.patches.sort((a, b) => new Date(b.patch_date) - new Date(a.patch_date));
+                
+                const select = document.getElementById('eraSelect');
+                select.innerHTML = '';
+                
+                for (const patch of patches) {
+                    const opt = document.createElement('option');
+                    opt.value = patch.id;
+                    opt.textContent = `${patch.patch_name} (${patch.patch_date})`;
+                    select.appendChild(opt);
+                }
+                
+                // Select the most recent patch by default (first in sorted list)
+                if (patches.length > 0) {
+                    select.value = patches[0].id;
+                }
+            } catch (err) {
+                console.error('Failed to load patches:', err);
+                document.getElementById('eraSelect').innerHTML = '<option value="">No eras available</option>';
+            }
+        }
+        
+        // Get currently selected patch ID
+        function getSelectedPatchId() {
+            return document.getElementById('eraSelect').value || null;
+        }
+        
         // Load communities for selected format
         async function loadCommunities() {
             const format = document.getElementById('formatSelect').value;
@@ -782,6 +820,7 @@
             
             const side = document.getElementById('sideFilter').value;
             const showInvalid = document.getElementById('showInvalid').checked;
+            const patchId = getSelectedPatchId();
             
             // Clear current selection and search
             currentCommunityId = null;
@@ -795,6 +834,7 @@
             
             try {
                 let url = `/api/communities?format_name=${encodeURIComponent(format)}`;
+                if (patchId) url += `&patch_id=${patchId}`;
                 if (side) url += `&side=${side}`;
                 if (showInvalid) url += `&include_invalid=true`;
                 
@@ -805,16 +845,18 @@
                 renderCommunityList();
                 
                 // Load card index in background for searching
-                loadCardIndex(format);
+                loadCardIndex(format, patchId);
             } catch (err) {
                 console.error('Failed to load communities:', err);
                 listEl.innerHTML = '<div class="empty-state">Error loading communities</div>';
             }
         }
         
-        async function loadCardIndex(format) {
+        async function loadCardIndex(format, patchId) {
             try {
-                const resp = await fetch(`/api/card-index?format_name=${encodeURIComponent(format)}`);
+                let url = `/api/card-index?format_name=${encodeURIComponent(format)}`;
+                if (patchId) url += `&patch_id=${patchId}`;
+                const resp = await fetch(url);
                 const data = await resp.json();
                 // Pre-normalize names for faster searching
                 cardIndex = data.cards.map(card => ({
@@ -1283,7 +1325,9 @@
             
             try {
                 const format = document.getElementById('formatSelect').value;
-                const url = `/api/card-communities/${encodeURIComponent(blueprint)}?format_name=${encodeURIComponent(format)}&exclude_community_id=${excludeCommunityId}&limit=10`;
+                const patchId = getSelectedPatchId();
+                let url = `/api/card-communities/${encodeURIComponent(blueprint)}?format_name=${encodeURIComponent(format)}&exclude_community_id=${excludeCommunityId}&limit=10`;
+                if (patchId) url += `&patch_id=${patchId}`;
                 
                 const resp = await fetch(url);
                 const data = await resp.json();
@@ -1314,12 +1358,15 @@
                 if (isOrphan && isAdmin) {
                     // Get all non-orphan communities for this format/side
                     const card = currentCardData;
-                    const allCommunitiesUrl = `/api/communities?format_name=${encodeURIComponent(format)}&side=${card.culture ? '' : ''}`; 
                     // Get the side from the current community or card
                     const currentComm = communities.find(c => c.id === excludeCommunityId);
                     const side = currentComm?.side || '';
                     
-                    const allResp = await fetch(`/api/communities?format_name=${encodeURIComponent(format)}${side ? `&side=${side}` : ''}`);
+                    let allCommunitiesUrl = `/api/communities?format_name=${encodeURIComponent(format)}`;
+                    if (patchId) allCommunitiesUrl += `&patch_id=${patchId}`;
+                    if (side) allCommunitiesUrl += `&side=${side}`;
+                    
+                    const allResp = await fetch(allCommunitiesUrl);
                     const allData = await allResp.json();
                     
                     // Filter to non-orphan communities not in related list
@@ -1442,6 +1489,7 @@
         
         // Event listeners
         document.getElementById('formatSelect').addEventListener('change', loadCommunities);
+        document.getElementById('eraSelect').addEventListener('change', loadCommunities);
         document.getElementById('sideFilter').addEventListener('change', loadCommunities);
         document.getElementById('showInvalid').addEventListener('change', loadCommunities);
         document.getElementById('cardSearch').addEventListener('input', function() {
@@ -1607,6 +1655,7 @@
         
         // Init
         loadFormats();
+        loadPatches();
     </script>
 </body>
 </html>
