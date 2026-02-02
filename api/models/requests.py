@@ -14,5 +14,7 @@ class CreatePatchRequest(BaseModel):
 
 
 class PrecomputeRequest(BaseModel):
-    mode: Literal['incremental', 'full_rebuild']
+    mode: Literal['incremental', 'full_rebuild', 'date_range']
     date: Optional[date] = None  # For incremental mode, specific date to compute
+    start_date: Optional[date] = None  # For date_range mode
+    end_date: Optional[date] = None  # For date_range mode

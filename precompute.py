@@ -8,6 +8,7 @@ Designed to be run daily via cron or triggered manually.
 Usage:
     python precompute.py                      # Compute stats for yesterday
     python precompute.py --date 2024-01-15    # Compute stats for specific date
+    python precompute.py --start-date 2024-01-01 --end-date 2024-01-31  # Date range
     python precompute.py --rebuild            # Full rebuild of all stats
     python precompute.py --dry-run            # Show what would be computed
 """
@@ -164,6 +165,44 @@ def get_all_game_dates(cursor) -> list:
     return [row[0] for row in cursor.fetchall()]
 
 
+def compute_date_range(conn, cursor, start_date: date, end_date: date, dry_run: bool = False) -> int:
+    """
+    Compute stats for a date range (inclusive).
+    
+    Returns total number of rows upserted.
+    """
+    logger.info(f"Computing stats for date range: {start_date} to {end_date}")
+    
+    # Generate all dates in range
+    dates = []
+    current = start_date
+    while current <= end_date:
+        dates.append(current)
+        current += timedelta(days=1)
+    
+    logger.info(f"Processing {len(dates)} dates")
+    
+    total_rows = 0
+    total_player_rows = 0
+    
+    for i, target_date in enumerate(dates):
+        rows = compute_daily_stats(cursor, target_date, dry_run)
+        player_rows = compute_daily_player_stats(cursor, target_date, dry_run)
+        total_rows += rows
+        total_player_rows += player_rows
+        
+        # Commit periodically to avoid long transactions
+        if not dry_run and (i + 1) % 30 == 0:
+            conn.commit()
+            logger.info(f"Progress: {i + 1}/{len(dates)} dates processed")
+    
+    if not dry_run:
+        conn.commit()
+    
+    logger.info(f"Date range complete. Stat rows: {total_rows}, Player rows: {total_player_rows}")
+    return total_rows + total_player_rows
+
+
 def rebuild_all_stats(conn, cursor, dry_run: bool = False) -> int:
     """
     Full rebuild of all daily stats.
@@ -203,10 +242,21 @@ def rebuild_all_stats(conn, cursor, dry_run: bool = False) -> int:
 def main():
     parser = argparse.ArgumentParser(description='GEMP Analytics Pre-computation')
     parser.add_argument('--date', type=str, help='Specific date to compute (YYYY-MM-DD)')
+    parser.add_argument('--start-date', type=str, help='Start of date range (YYYY-MM-DD)')
+    parser.add_argument('--end-date', type=str, help='End of date range (YYYY-MM-DD)')
     parser.add_argument('--rebuild', action='store_true', help='Full rebuild of all stats')
     parser.add_argument('--dry-run', action='store_true', help='Show what would be computed')
     parser.add_argument('--config', default='config.ini', help='Config file path')
     args = parser.parse_args()
+    
+    # Validate arguments
+    if args.date and (args.start_date or args.end_date):
+        logger.error("Cannot use --date with --start-date/--end-date")
+        sys.exit(1)
+    
+    if bool(args.start_date) != bool(args.end_date):
+        logger.error("Both --start-date and --end-date must be provided together")
+        sys.exit(1)
     
     # Load configuration
     config = Config(args.config)
@@ -237,6 +287,32 @@ def main():
             
             try:
                 total_rows = rebuild_all_stats(conn, cursor, args.dry_run)
+                if log_id:
+                    log_computation_end(cursor, log_id, total_rows, 'completed')
+                    conn.commit()
+            except Exception as e:
+                if log_id:
+                    log_computation_end(cursor, log_id, 0, 'failed', str(e))
+                    conn.commit()
+                raise
+        
+        elif args.start_date and args.end_date:
+            # Date range computation
+            start_date = datetime.strptime(args.start_date, '%Y-%m-%d').date()
+            end_date = datetime.strptime(args.end_date, '%Y-%m-%d').date()
+            
+            if start_date > end_date:
+                logger.error("Start date must be before or equal to end date")
+                sys.exit(1)
+            
+            computation_type = 'date_range'
+            log_id = None
+            if not args.dry_run:
+                log_id = log_computation_start(cursor, computation_type)
+                conn.commit()
+            
+            try:
+                total_rows = compute_date_range(conn, cursor, start_date, end_date, args.dry_run)
                 if log_id:
                     log_computation_end(cursor, log_id, total_rows, 'completed')
                     conn.commit()

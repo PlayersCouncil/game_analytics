@@ -25,12 +25,14 @@ def verify_admin_key(x_api_key: Optional[str] = Header(None)):
         raise HTTPException(403, "Invalid or missing API key")
 
 
-def run_precompute(mode: str, target_date: Optional[date] = None):
+def run_precompute(mode: str, target_date: Optional[date] = None, start_date: Optional[date] = None, end_date: Optional[date] = None):
     """Run precompute.py in subprocess."""
     cmd = [sys.executable, 'precompute.py']
     
     if mode == 'full_rebuild':
         cmd.append('--rebuild')
+    elif mode == 'date_range' and start_date and end_date:
+        cmd.extend(['--start-date', start_date.isoformat(), '--end-date', end_date.isoformat()])
     elif target_date:
         cmd.extend(['--date', target_date.isoformat()])
     
@@ -105,21 +107,38 @@ def trigger_precompute(
     """
     Trigger pre-computation of daily stats.
     
-    - **mode**: 'incremental' for single day, 'full_rebuild' for all data
+    - **mode**: 'incremental' for single day, 'date_range' for range, 'full_rebuild' for all data
     - **date**: For incremental mode, specific date to compute (defaults to yesterday)
+    - **start_date**, **end_date**: For date_range mode
     """
     target_date = request.date
+    start_date = request.start_date
+    end_date = request.end_date
+    
     if request.mode == 'incremental' and not target_date:
         target_date = date.today() - timedelta(days=1)
     
-    # Run in background to avoid timeout
-    background_tasks.add_task(run_precompute, request.mode, target_date)
+    if request.mode == 'date_range':
+        if not start_date or not end_date:
+            raise HTTPException(400, "date_range mode requires start_date and end_date")
+        if start_date > end_date:
+            raise HTTPException(400, "start_date must be before or equal to end_date")
     
-    return {
+    # Run in background to avoid timeout
+    background_tasks.add_task(run_precompute, request.mode, target_date, start_date, end_date)
+    
+    response = {
         "status": "started",
         "mode": request.mode,
-        "date": target_date.isoformat() if target_date else None,
     }
+    
+    if request.mode == 'date_range':
+        response["start_date"] = start_date.isoformat()
+        response["end_date"] = end_date.isoformat()
+    elif target_date:
+        response["date"] = target_date.isoformat()
+    
+    return response
 
 
 @router.get("/status", response_model=AdminStatusResponse)

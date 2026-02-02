@@ -39,6 +39,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def log_job_start(cursor, job_type: str) -> int:
+    """Log the start of a job, return log ID."""
+    cursor.execute("""
+        INSERT INTO stats_computation_log (computation_type, started_at, status)
+        VALUES (%s, NOW(), 'running')
+    """, (job_type,))
+    return cursor.lastrowid
+
+
+def log_job_end(cursor, log_id: int, records: int, status: str, error: str = None):
+    """Log the completion of a job."""
+    cursor.execute("""
+        UPDATE stats_computation_log 
+        SET completed_at = NOW(), records_processed = %s, status = %s, error_message = %s
+        WHERE id = %s
+    """, (records, status, error, log_id))
+
 # Processing version - increment when classification logic changes
 PROCESSING_VERSION = 1
 
@@ -325,9 +343,10 @@ def get_unprocessed_games(cursor, limit: Optional[int] = 500) -> list:
           AND gh.win_recording_id IS NOT NULL
           AND gh.lose_recording_id IS NOT NULL
           AND gh.start_date > '2023-06-20'
-        ORDER BY gh.start_date ASC
+        ORDER BY gh.start_date DESC
     """
-    # The date is after metadata version 2
+    # Sort DESC so daily cron processes most recent games first
+    # The date filter is after metadata version 2
     
     if limit:
         query += f" LIMIT {int(limit)}"
@@ -517,59 +536,81 @@ def main():
         sys.exit(1)
     
     try:
-        # Get unprocessed games
-        games = get_unprocessed_games(cursor, args.limit)
-        logger.info(f"Found {len(games)} unprocessed games in target formats")
+        # Log job start (unless dry run)
+        log_id = None
+        if not args.dry_run:
+            log_id = log_job_start(cursor, 'ingest')
+            conn.commit()
         
-        if not games:
-            logger.info("No games to process")
-            return
-        
-        # Process in batches
-        processed_batch = []
-        stats = {'processed': 0, 'skipped': 0, 'errors': 0, 'bots': 0}
-        
-        for i, game in enumerate(games):
-            # Skip games involving bots
-            if is_bot_player(game.winner) or is_bot_player(game.loser):
-                stats['bots'] += 1
-                continue
+        try:
+            # Get unprocessed games
+            games = get_unprocessed_games(cursor, args.limit)
+            logger.info(f"Found {len(games)} unprocessed games in target formats")
             
-            # Load summary file
-            summary_path = construct_summary_path(game, Path(config.replay_base_path))
-            summary = load_summary(summary_path)
+            if not games:
+                logger.info("No games to process")
+                if log_id:
+                    log_job_end(cursor, log_id, 0, 'completed')
+                    conn.commit()
+                return
             
-            if summary is None:
-                stats['skipped'] += 1
-                continue
+            # Process in batches
+            processed_batch = []
+            stats = {'processed': 0, 'skipped': 0, 'errors': 0, 'bots': 0}
             
-            # Process game
-            processed = process_game(game, summary, normalizer, cursor)
+            for i, game in enumerate(games):
+                # Skip games involving bots
+                if is_bot_player(game.winner) or is_bot_player(game.loser):
+                    stats['bots'] += 1
+                    continue
+                
+                # Load summary file
+                summary_path = construct_summary_path(game, Path(config.replay_base_path))
+                summary = load_summary(summary_path)
+                
+                if summary is None:
+                    stats['skipped'] += 1
+                    continue
+                
+                # Process game
+                processed = process_game(game, summary, normalizer, cursor)
+                
+                if processed is None:
+                    stats['errors'] += 1
+                    continue
+                
+                processed_batch.append(processed)
+                stats['processed'] += 1
+                
+                # Commit batch
+                if len(processed_batch) >= args.batch_size:
+                    insert_batch(conn, cursor, processed_batch, args.dry_run)
+                    processed_batch = []
+                
+                # Progress logging
+                if (i + 1) % 1000 == 0:
+                    logger.info(f"Progress: {i + 1}/{len(games)} games checked")
             
-            if processed is None:
-                stats['errors'] += 1
-                continue
-            
-            processed_batch.append(processed)
-            stats['processed'] += 1
-            
-            # Commit batch
-            if len(processed_batch) >= args.batch_size:
+            # Final batch
+            if processed_batch:
                 insert_batch(conn, cursor, processed_batch, args.dry_run)
-                processed_batch = []
             
-            # Progress logging
-            if (i + 1) % 1000 == 0:
-                logger.info(f"Progress: {i + 1}/{len(games)} games checked")
+            logger.info(
+                f"Complete. Processed: {stats['processed']}, "
+                f"Skipped: {stats['skipped']}, Bots: {stats['bots']}, Errors: {stats['errors']}"
+            )
+            
+            # Log success
+            if log_id:
+                log_job_end(cursor, log_id, stats['processed'], 'completed')
+                conn.commit()
         
-        # Final batch
-        if processed_batch:
-            insert_batch(conn, cursor, processed_batch, args.dry_run)
-        
-        logger.info(
-            f"Complete. Processed: {stats['processed']}, "
-            f"Skipped: {stats['skipped']}, Bots: {stats['bots']}, Errors: {stats['errors']}"
-        )
+        except Exception as e:
+            # Log failure
+            if log_id:
+                log_job_end(cursor, log_id, 0, 'failed', str(e))
+                conn.commit()
+            raise
     
     finally:
         cursor.close()
